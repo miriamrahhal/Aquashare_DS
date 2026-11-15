@@ -50,6 +50,8 @@ class Wallet:
         self._lock = threading.Lock()
         self._days: dict[str, DayBalance] = {}
         self._seq = 0
+        self._ledger_days: set[str] = set()   # days whose allocation came from the ledger
+        self._synced_upto = 0                 # every event up to this seq is known to the ledger
         for event in journal.read_all():
             self._apply(event)
 
@@ -64,6 +66,10 @@ class Wallet:
         kind, amount = event["type"], event.get("amount", 0)
         if kind == "allocation":
             day.allocated = amount
+            if event.get("source") == "ledger":
+                self._ledger_days.add(event["day"])
+        elif kind == "sync_ack":
+            self._synced_upto = max(self._synced_upto, event["upto_seq"])
         elif kind == "consume":
             day.consumed += amount
         elif kind == "reserve":
@@ -135,6 +141,44 @@ class Wallet:
         with self._lock:
             return self._record("transfer_received", day, amount, transfer_id=transfer_id)
 
+    # ------------------------------------------------------------ synchronisation with the ledger
+    def set_ledger_allocation(self, day: str, amount: int) -> dict | None:
+        """Record the allocation the ledger granted for a day (once per day)."""
+        with self._lock:
+            if day in self._ledger_days:
+                return None
+            return self._record("allocation", day, amount, source="ledger")
+
+    def current_day(self) -> str | None:
+        """The latest day opened by the ledger. The farm never decides the day from its own clock."""
+        with self._lock:
+            return max(self._ledger_days) if self._ledger_days else None
+
+    def pending_consumption(self, limit: int = 200) -> tuple[str | None, list[dict]]:
+        """The oldest consumption events the ledger has not confirmed yet, all from the same day."""
+        with self._lock:
+            pending = [e for e in self.journal.read_all()
+                       if e["type"] == "consume" and e["seq"] > self._synced_upto and e["day"] in self._ledger_days]
+        if not pending:
+            return None, []
+        day = pending[0]["day"]
+        batch = []
+        for e in pending:
+            if e["day"] != day or len(batch) == limit:
+                break
+            batch.append(e)
+        return day, batch
+
+    def pending_count(self) -> int:
+        with self._lock:
+            return sum(1 for e in self.journal.read_all()
+                       if e["type"] == "consume" and e["seq"] > self._synced_upto and e["day"] in self._ledger_days)
+
+    def mark_synced(self, day: str, upto_seq: int) -> dict:
+        """The ledger has committed every consumption event up to upto_seq."""
+        with self._lock:
+            return self._record("sync_ack", day, upto_seq=upto_seq)
+        
     def balance(self, day: str) -> dict:
         with self._lock:
             return {"farm_id": self.farm_id, "day": day, **self._day(day).as_dict()}

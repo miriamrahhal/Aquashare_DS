@@ -1,36 +1,39 @@
-"""Farm node: simulated sensors and irrigation, spending only from the local escrow wallet."""
+"""Farm node: simulated sensors and irrigation, spending only from the local escrow wallet.
+
+The water the farm may use comes from the ledger: the sync client learns each day's
+allocation through the gateway and reports consumption back. The farm keeps irrigating
+while it is offline, from the water it already holds.
+"""
 import logging
 import os
 import random
 import threading
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from farm_node.journal import Journal
+from farm_node.sync import LedgerSync
 from farm_node.wallet import InsufficientWater, Wallet
 
 FARM_ID = os.getenv("FARM_ID", "farm-a")
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data")) / FARM_ID
-INITIAL_QUOTA_L = int(os.getenv("INITIAL_QUOTA_L", "10000"))   # temporary: replaced by ledger allocations
+GATEWAY_URL = os.getenv("GATEWAY_URL", "http://localhost:8600")
+SYNC_SECONDS = float(os.getenv("SYNC_SECONDS", "5"))
 TICK_SECONDS = float(os.getenv("TICK_SECONDS", "2"))
 FLOW_L_PER_TICK = int(os.getenv("FLOW_L_PER_TICK", "20"))
 MOISTURE_ON, MOISTURE_OFF = 35.0, 60.0   # start irrigating below 35%, stop above 60%
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger(FARM_ID)
 
 wallet = Wallet(FARM_ID, Journal(DATA_DIR / "journal.jsonl"))
+sync = LedgerSync(wallet, FARM_ID, GATEWAY_URL, interval=SYNC_SECONDS)
 sensors = {"soil_moisture": 50.0, "flow_l_per_tick": 0, "valve_open": False, "irrigation_enabled": True,
            "quota_exhausted": False}
-
-
-def today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
 
 
 def irrigation_loop() -> None:
@@ -38,27 +41,27 @@ def irrigation_loop() -> None:
     while True:
         time.sleep(TICK_SECONDS)
         sensors["soil_moisture"] = max(0.0, sensors["soil_moisture"] - random.uniform(0.5, 1.5))
-        wants_water = sensors["irrigation_enabled"] and (
+        day = wallet.current_day()
+        wants_water = day and sensors["irrigation_enabled"] and (
             sensors["soil_moisture"] < MOISTURE_ON or (sensors["valve_open"] and sensors["soil_moisture"] < MOISTURE_OFF)
         )
         if not wants_water:
             sensors.update(valve_open=False, flow_l_per_tick=0)
             continue
         try:
-            wallet.consume(today(), FLOW_L_PER_TICK)
+            wallet.consume(day, FLOW_L_PER_TICK)
             sensors.update(valve_open=True, flow_l_per_tick=FLOW_L_PER_TICK, quota_exhausted=False)
             sensors["soil_moisture"] = min(100.0, sensors["soil_moisture"] + random.uniform(2.0, 3.0))
         except InsufficientWater:
             if not sensors["quota_exhausted"]:
-                log.warning("Quota exhausted for %s: valve closed", today())
+                log.warning("Quota exhausted for %s: valve closed", day)
             sensors.update(valve_open=False, flow_l_per_tick=0, quota_exhausted=True)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    if not wallet.has_allocation(today()):
-        wallet.set_allocation(today(), INITIAL_QUOTA_L)
-    log.info("Farm %s started: %s", FARM_ID, wallet.balance(today()))
+    log.info("Farm %s started; ledger day %s; gateway %s", FARM_ID, wallet.current_day(), GATEWAY_URL)
+    sync.start()
     threading.Thread(target=irrigation_loop, name="irrigation", daemon=True).start()
     yield
 
@@ -70,6 +73,13 @@ class Amount(BaseModel):
     amount: int
 
 
+def current_day() -> str:
+    day = wallet.current_day()
+    if day is None:
+        raise HTTPException(409, "no allocation from the ledger yet")
+    return day
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "farm_id": FARM_ID}
@@ -77,7 +87,7 @@ def health() -> dict:
 
 @app.get("/wallet")
 def get_wallet() -> dict:
-    return wallet.balance(today())
+    return wallet.balance(current_day())
 
 
 @app.get("/sensors")
@@ -89,7 +99,7 @@ def get_sensors() -> dict:
 def consume(body: Amount) -> dict:
     """Manual consumption, used by tests and demos."""
     try:
-        return wallet.consume(today(), body.amount)
+        return wallet.consume(current_day(), body.amount)
     except InsufficientWater as exc:
         raise HTTPException(409, str(exc))
     except ValueError as exc:
@@ -102,6 +112,21 @@ def set_irrigation(state: str) -> dict:
         raise HTTPException(422, "state must be on or off")
     sensors["irrigation_enabled"] = state == "on"
     return {"irrigation_enabled": sensors["irrigation_enabled"]}
+
+
+@app.get("/sync")
+def sync_status() -> dict:
+    return sync.status()
+
+
+@app.post("/link/{state}")
+def set_link(state: str) -> dict:
+    """Simulate losing (down) or recovering (up) the farm's connection to the gateway."""
+    if state not in ("up", "down"):
+        raise HTTPException(422, "state must be up or down")
+    sync.link_up = state == "up"
+    log.warning("uplink %s", state.upper())
+    return {"link": state}
 
 
 @app.get("/journal")
