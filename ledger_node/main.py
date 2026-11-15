@@ -17,7 +17,7 @@ from ledger_node.proto import raft_pb2_grpc
 from ledger_node.raft import CommitTimeout, NotLeader, RaftNode
 from ledger_node.storage import MemoryStorage
 from ledger_node.state_machine import StateMachine
-from ledger_node import metrics
+from ledger_node import merkle, metrics
 
 NODE_ID = os.getenv("NODE_ID", "ledger-1")
 GRPC_PORT = int(os.getenv("GRPC_PORT", "50051"))
@@ -156,3 +156,36 @@ def read_events(after: int = 0, limit: int = 200) -> list[dict]:
     if state is None:
         raise HTTPException(404, "this node has no database")
     return state.events(after, limit)
+
+
+# ---------------------------------------------------------------- Merkle proofs
+def committed_leaves(size: int | None):
+    commit = node.status()["commit_index"]
+    size = commit if size is None else size
+    if not 1 <= size <= commit:
+        raise HTTPException(400, f"size must be between 1 and the commit index {commit}")
+    entries = node.storage.entries_from(1, size)
+    return size, entries, [merkle.leaf_hash(e.entry_hash) for e in entries]
+
+
+@app.get("/merkle/root")
+def merkle_root(size: int | None = None) -> dict:
+    """Root hash of the Merkle tree over the first `size` committed entries (default: all of them)."""
+    size, _, leaves = committed_leaves(size)
+    return {"node_id": NODE_ID, "size": size, "root": merkle.root(leaves).hex()}
+
+
+@app.get("/merkle/proof")
+def merkle_proof(index: int | None = None, transfer_id: str | None = None, size: int | None = None) -> dict:
+    """Proof that one committed entry is in the tree. Find it by log index or by transfer_id."""
+    size, entries, leaves = committed_leaves(size)
+    if index is None and transfer_id:
+        index = next((e.index for e in entries if transfer_id in e.command
+                      and json.loads(e.command).get("transfer_id") == transfer_id), None)
+    if index is None or not 1 <= index <= size:
+        raise HTTPException(404, "no such committed entry")
+    e = entries[index - 1]
+    return {"node_id": NODE_ID, "size": size, "root": merkle.root(leaves).hex(),
+            "entry": {"index": e.index, "term": e.term, "command": json.loads(e.command),
+                      "prev_hash": e.prev_hash, "entry_hash": e.entry_hash},
+            "path": [h.hex() for h in merkle.proof(leaves, index - 1)]}
