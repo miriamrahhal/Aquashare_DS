@@ -141,3 +141,11 @@ def read_transfers(farm: str, day: str | None = None) -> list[dict]:
     if state is None:
         raise HTTPException(404, "this node has no database")
     return state.transfers(farm, day)
+
+
+@app.get("/events")
+def read_events(after: int = 0, limit: int = 200) -> list[dict]:
+    """Applied commands after a log index, for the event relay."""
+    if state is None:
+        raise HTTPException(404, "this node has no database")
+    return state.events(after, limit)

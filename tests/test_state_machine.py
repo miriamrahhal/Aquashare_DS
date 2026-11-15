@@ -141,3 +141,24 @@ def test_same_log_gives_same_state_on_every_node(dsn):
     node2.conn.close()
     with psycopg.connect(ADMIN_DSN, autocommit=True) as admin:
         admin.execute("DROP DATABASE IF EXISTS ledger_test_b WITH (FORCE)")
+
+
+def test_events_are_listed_in_log_order_with_their_results(dsn):
+    from ledger_node.storage import PostgresStorage
+    storage, sm = PostgresStorage(dsn), StateMachine(dsn)
+
+    class LoggedLog(Log):                       # like a real node: append to the Raft log, then apply
+        def run(self, **command):
+            command.setdefault("cmd_id", str(uuid.uuid4()))
+            entry = Entry(self.index + 1, 1, json.dumps(command))
+            storage.append([entry])
+            self.index += 1
+            return self.sm.apply(entry)
+
+    log = LoggedLog(sm)
+    setup_day(log)
+    log.run(type="transfer", transfer_id=str(uuid.uuid4()), day=DAY, sender="farm-c", recipient="farm-a", amount_l=99999)
+    events = sm.events(after=0)
+    assert [e["log_index"] for e in events] == list(range(1, log.index + 1))
+    assert events[-1]["result"]["ok"] is False                       # rejected: listed, marked not ok
+    assert [e["log_index"] for e in sm.events(after=3)] == [4, 5]

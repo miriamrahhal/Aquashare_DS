@@ -30,6 +30,15 @@ x-gateway: &gateway
   restart: "no"
   depends_on: [ledger-1, ledger-2, ledger-3]
 
+x-analytics: &analytics
+  build:
+    context: .
+    dockerfile: analytics/Dockerfile
+  restart: unless-stopped
+  depends_on:
+    rabbitmq:
+      condition: service_healthy
+
 services:
   gateway-1:
     <<: *gateway
@@ -86,6 +95,9 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: aq-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: aquashare
+      RABBITMQ_DEFAULT_PASS: aquashare_dev
     ports:
       - "5673:5672"
       - "15673:15672"
@@ -164,6 +176,23 @@ services:
         condition: service_healthy
     ports: [ "8703:8000" ]
 
+  event-relay:
+    <<: *analytics
+    container_name: aq-event-relay
+    command: ["python", "-m", "analytics.relay"]
+    environment:
+      RABBITMQ_URL: amqp://aquashare:aquashare_dev@rabbitmq:5672/%2F
+      LEDGER_NODES: http://ledger-1:8000,http://ledger-2:8000,http://ledger-3:8000
+    volumes: [ "relay-data:/data" ]
+
+  analytics:
+    <<: *analytics
+    container_name: aq-analytics
+    environment:
+      RABBITMQ_URL: amqp://aquashare:aquashare_dev@rabbitmq:5672/%2F
+    ports: [ "8901:8000" ]
+    volumes: [ "analytics-data:/data" ]
+
 volumes:
   ledger-db-1:
   ledger-db-2:
@@ -173,3 +202,5 @@ volumes:
   farm-b-data:
   farm-c-data:
   farm-d-data:
+  relay-data:
+  analytics-data:

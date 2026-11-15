@@ -164,6 +164,20 @@ class StateMachine:
             raise Rejected(f"no allocation for farm {farm_id} on {day} (unknown farm or day not opened)")
         return dict(zip(("allocated", "received", "sent", "consumed"), row))
 
+    def events(self, after: int = 0, limit: int = 200) -> list[dict]:
+        """Commands applied after a log index, with their results (read by the event relay).
+
+        Only entries up to last_applied are returned, so an event is never published
+        before it is committed and applied. Rejected commands are included with ok=false,
+        so the relay can move past them without publishing them."""
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT r.log_index, r.command::text, a.result::text FROM raft_log r "
+                "JOIN applied_commands a ON a.log_index = r.log_index "
+                "WHERE r.log_index > %s AND r.log_index <= (SELECT last_applied FROM raft_metadata WHERE id = 1) "
+                "ORDER BY r.log_index LIMIT %s", (after, limit)).fetchall()
+        return [{"log_index": i, "command": json.loads(c), "result": json.loads(r)} for i, c, r in rows]
+
     def transfers(self, farm_id: str, day: str | None = None) -> list[dict]:
         """Committed transfers sent or received by a farm (all days, or one day)."""
         with self.lock:
