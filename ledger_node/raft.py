@@ -31,7 +31,7 @@ class CommitTimeout(Exception):
 
 
 class RaftNode(raft_pb2_grpc.RaftServicer):
-    def __init__(self, node_id, peers, storage, apply_fn=None,
+    def __init__(self, node_id, peers, storage, apply_fn=None, applied_index=0,
                  election_timeout=(1.5, 3.0), heartbeat_interval=0.3, rpc_timeout=0.5):
         self.id = node_id
         self.peers = dict(peers)                      # peer id -> "host:port"
@@ -46,8 +46,8 @@ class RaftNode(raft_pb2_grpc.RaftServicer):
         self.term, self.voted_for = storage.load_term_vote()
         self.role = FOLLOWER
         self.leader_id = None
-        self.commit_index = 0
-        self.last_applied = 0
+        self.commit_index = applied_index     # entries already applied before a restart are committed
+        self.last_applied = applied_index
         self.next_index = {}
         self.match_index = {}
         self.results = {}
@@ -274,9 +274,9 @@ class RaftNode(raft_pb2_grpc.RaftServicer):
     def _apply_committed(self):
         """Apply committed entries to the state machine in log order. Must hold the lock."""
         while self.last_applied < self.commit_index:
-            self.last_applied += 1
-            entry = self.storage.entry(self.last_applied)
+            entry = self.storage.entry(self.last_applied + 1)
             self.results[entry.index] = self.apply_fn(entry)
+            self.last_applied += 1               # only after the entry was applied successfully
         self.changed.notify_all()
 
     # ------------------------------------------------------------------ client commands

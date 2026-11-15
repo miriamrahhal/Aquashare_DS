@@ -65,3 +65,9 @@ CREATE TABLE IF NOT EXISTS farm_balances (
     PRIMARY KEY (day, farm_id),
     CHECK (consumed <= allocated + received - sent)
 );
+-- Every command carries a unique cmd_id; its result is stored so a retried command is applied only once
+CREATE TABLE IF NOT EXISTS applied_commands (
+    cmd_id     TEXT PRIMARY KEY,
+    log_index  BIGINT NOT NULL,
+    result     JSONB  NOT NULL
+);

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from ledger_node.proto import raft_pb2_grpc
 from ledger_node.raft import CommitTimeout, NotLeader, RaftNode
 from ledger_node.storage import MemoryStorage
+from ledger_node.state_machine import StateMachine
 
 NODE_ID = os.getenv("NODE_ID", "ledger-1")
 GRPC_PORT = int(os.getenv("GRPC_PORT", "50051"))
@@ -32,11 +33,10 @@ HTTP_PEERS = parse_peers(os.getenv("HTTP_PEERS", ""))     # HTTP addresses, used
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger(NODE_ID)
 
-
-def apply(entry):
-    """State machine. For now it only records what was committed; allocation rules come later."""
+def log_only_apply(entry):
+    """Used when there is no database: only records what was committed."""
     log.info("applied entry %d (term %d): %s", entry.index, entry.term, entry.command)
-    return {"index": entry.index}
+    return {"ok": True}
 
 
 def open_storage():
@@ -56,7 +56,19 @@ def open_storage():
     raise RuntimeError("could not connect to the ledger database")
 
 
-node = RaftNode(NODE_ID, PEERS, open_storage(), apply_fn=apply)
+storage = open_storage()
+state = StateMachine(os.environ["DATABASE_URL"]) if os.getenv("DATABASE_URL") else None
+
+
+def apply(entry):
+    result = state.apply(entry) if state else log_only_apply(entry)
+    log.info("applied entry %d (term %d) %s -> %s", entry.index, entry.term, entry.command, result)
+    return result
+
+
+applied = state.last_applied() if state else 0
+log.info("state machine resumes after entry %d", applied)
+node = RaftNode(NODE_ID, PEERS, storage, apply_fn=apply, applied_index=applied)
 grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=16))
 raft_pb2_grpc.add_RaftServicer_to_server(node, grpc_server)
 grpc_server.add_insecure_port(f"[::]:{GRPC_PORT}")
@@ -114,3 +126,10 @@ def submit(body: Command) -> dict:
         return {**reply.json(), "forwarded_by": NODE_ID}
     except CommitTimeout:
         raise HTTPException(503, "command not committed: no majority of ledger nodes is reachable")
+
+@app.get("/state")
+def read_state(day: str | None = None) -> dict:
+    """Balances for a day (default: the current day) as stored on this node."""
+    if state is None:
+        raise HTTPException(404, "this node has no database")
+    return {"node_id": NODE_ID, "last_applied": node.status()["last_applied"], **state.snapshot(day)}
