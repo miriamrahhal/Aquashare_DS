@@ -220,6 +220,28 @@ services:
     depends_on: [ prometheus ]
     restart: unless-stopped
 
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    container_name: aq-dashboard
+    environment:
+      GATEWAY_URL: http://gateway-lb
+      LEDGER_NODES: ledger-1=http://ledger-1:8000,ledger-2=http://ledger-2:8000,ledger-3=http://ledger-3:8000
+      FARM_NODES: farm-a=http://farm-a:8000,farm-b=http://farm-b:8000,farm-c=http://farm-c:8000,farm-d=http://farm-d:8000
+      ANALYTICS_URL: http://analytics:8000
+      LEDGER_DSNS: postgresql://aquashare:aquashare_dev@ledger-db-1:5432/ledger,postgresql://aquashare:aquashare_dev@ledger-db-2:5432/ledger,postgresql://aquashare:aquashare_dev@ledger-db-3:5432/ledger
+    # the DB networks let the "Check the rules" scenario read the 3 databases (read-only checks)
+    networks: [ default, ledger-1-db, ledger-2-db, ledger-3-db ]
+    volumes:
+      - ./results:/app/results:ro
+      # DEMO ONLY: lets the dashboard stop/start ledger containers (scenarios 1 and 2).
+      # This gives it full control of Docker; never do this in production.
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports: [ "8090:8000" ]
+    depends_on: [ gateway-lb ]
+    restart: unless-stopped
+
 volumes:
   ledger-db-1:
   ledger-db-2:

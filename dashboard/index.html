@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AquaShare Monitoring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #d7e4c6;
+    --frame: #f3f4f1;
+    --card: #ffffff;
+    --tile: #f4f5f2;
+    --ink: #161a14;
+    --muted: #8a9184;
+    --line: #e7e9e3;
+    --green: #4caf1a;
+    --green-2: #3d9512;
+    --green-soft: #a6dc7c;
+    --green-pale: #e7f5da;
+    --yellow: #f7e46d;
+    --yellow-pale: #fdf7c6;
+    --red: #e5484d;
+    --black: #262a24;
+    --radius: 22px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Urbanist", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    background-image: linear-gradient(135deg, rgba(255,255,255,.18) 25%, transparent 25%),
+                      linear-gradient(225deg, rgba(255,255,255,.12) 25%, transparent 25%);
+    background-size: 900px 900px;
+    min-height: 100vh;
+    padding: 28px;
+  }
+  .frame {
+    max-width: 1440px; margin: 0 auto;
+    background: var(--frame);
+    border-radius: 34px;
+    padding: 22px 24px 26px;
+    box-shadow: 0 0 0 10px rgba(255,255,255,.35), 0 30px 60px rgba(60,90,30,.12);
+  }
+
+  /* header */
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  .logo { width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #6cd12d, var(--green-2));
+          display: grid; place-items: center; box-shadow: 0 6px 14px rgba(76,175,26,.35); }
+  header h1 { font-size: 26px; font-weight: 500; margin: 0 0 0 4px; letter-spacing: -.3px; }
+  .spacer { flex: 1; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 12px;
+          background: var(--card); font-size: 14px; font-weight: 500; box-shadow: 0 1px 0 var(--line); white-space: nowrap; }
+  .pill svg { width: 16px; height: 16px; }
+  .badge { background: var(--red); color: #fff; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 1px 7px; }
+  .badge.ok { background: var(--green); }
+
+  /* layout */
+  .shell { display: block; }
+  nav { display: flex; flex-direction: column; gap: 12px; }
+  nav a { width: 48px; height: 48px; border-radius: 14px; background: var(--card); display: grid; place-items: center;
+          color: var(--ink); box-shadow: 0 1px 0 var(--line); transition: transform .15s; }
+  nav a:hover { transform: translateY(-2px); }
+  nav a.active { background: var(--black); color: #fff; box-shadow: 0 8px 18px rgba(0,0,0,.18); }
+  nav svg { width: 19px; height: 19px; }
+  nav .bottom { margin-top: auto; }
+
+  main { display: grid; gap: 20px; min-width: 0; }
+  .card { background: var(--card); border-radius: var(--radius); padding: 22px; min-width: 0; }
+  .card h2 { font-size: 24px; font-weight: 500; margin: 0; letter-spacing: -.3px; }
+  .card h3 { font-size: 21px; font-weight: 500; margin: 0; letter-spacing: -.2px; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .btn { border: 0; background: var(--black); color: #fff; height: 38px; padding: 0 16px; border-radius: 10px; font: inherit;
+         font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+         box-shadow: 0 6px 14px rgba(0,0,0,.15); }
+  .btn.light { background: var(--tile); color: var(--ink); box-shadow: none; }
+  .btn.green { background: var(--green); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .dots { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); display: grid; place-items: center;
+          color: var(--muted); font-weight: 700; letter-spacing: 1px; }
+
+  /* stat tiles */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .tile { background: var(--tile); border-radius: 18px; padding: 20px; min-height: 170px; display: flex; flex-direction: column; }
+  .tile .label { font-size: 15px; font-weight: 500; }
+  .tile .big { margin-top: auto; font-size: 54px; font-weight: 300; line-height: 1; letter-spacing: -2px; }
+  .tile .big small { font-size: 19px; letter-spacing: 0; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .tile .note { margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .tile.hero { background: linear-gradient(160deg, #5cc126, var(--green-2)); color: #fff; box-shadow: 0 12px 26px rgba(76,175,26,.3); }
+  .tile.hero .big small, .tile.hero .note { color: rgba(255,255,255,.85); }
+
+  /* rows */
+  .row2 { display: grid; grid-template-columns: 1.65fr 1fr; gap: 20px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+  /* reservoir */
+  .res-card { display: flex; flex-direction: column; }
+  .reservoir { position: relative; flex: 1; min-height: 330px; border-radius: 18px; overflow: hidden;
+               background: linear-gradient(180deg, #f7f9f3 0%, #eef3e6 100%); }
+  .tank { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); width: 62%; height: calc(100% - 100px);
+          border-radius: 18px 18px 26px 26px; background: rgba(255,255,255,.7); border: 2px solid #dfe7d5; overflow: hidden;
+          box-shadow: inset 0 -10px 30px rgba(76,175,26,.08), 0 20px 30px rgba(60,90,30,.12); }
+  .water { position: absolute; left: 0; right: 0; bottom: 0; transition: height 1.2s cubic-bezier(.2,.8,.2,1);
+           background: linear-gradient(180deg, #7dd3f0, #2c9ad6); }
+  .water svg { position: absolute; top: -18px; left: 0; width: 200%; height: 20px; animation: wave 6s linear infinite; }
+  @keyframes wave { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  .soil { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: 72%; height: 30px; border-radius: 50%;
+          background: radial-gradient(ellipse at center, #5b4532 0%, #3c2b1f 70%); opacity: .9; }
+  .grass { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); width: 74%; height: 12px; border-radius: 40%;
+           background: linear-gradient(90deg, #6fbf3a, #4c9c22, #79c946); }
+  .level { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -30%); text-align: center; color: #fff;
+           text-shadow: 0 2px 10px rgba(0,60,100,.35); z-index: 2; }
+  .level.dark { color: #1d5f86; text-shadow: none; }
+  .level .num { font-size: 58px; font-weight: 300; letter-spacing: -2px; line-height: 1; }
+  .level .lbl { font-size: 14px; font-weight: 500; opacity: .95; }
+  .tag { position: absolute; z-index: 3; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+         background: rgba(80,95,70,.55); color: #fff; font-size: 14px; font-weight: 500; backdrop-filter: blur(8px); }
+  .tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #fff; }
+  .t1 { left: 22px; bottom: 60px; } .t2 { left: 40%; top: 26px; } .t3 { right: 22px; top: 80px; }
+
+  /* cluster */
+  .nodes { display: grid; gap: 12px; }
+  .node { display: grid; grid-template-columns: 42px 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 16px;
+          background: var(--tile); }
+  .node .ico { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: #fff; }
+  .node .name { font-weight: 600; font-size: 15px; }
+  .node .meta { color: var(--muted); font-size: 12.5px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .chip { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #fff; color: var(--muted); }
+  .chip.leader { background: var(--green); color: #fff; }
+  .chip.down { background: #fde7e7; color: var(--red); }
+  .node.isdown { opacity: .65; }
+  .merkle { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--green-pale); font-size: 13px; display: flex;
+            gap: 10px; align-items: center; }
+  .merkle code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--green-2); }
+
+  /* alerts (green card) */
+  .alerts { background: linear-gradient(165deg, #5cc126, var(--green-2)); color: #fff; }
+  .alerts .sub { color: rgba(255,255,255,.8); }
+  .alert { display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: center; padding: 10px 0;
+           border-bottom: 1px solid rgba(255,255,255,.18); }
+  .alert:last-child { border-bottom: 0; }
+  .alert .ico { width: 44px; height: 44px; border-radius: 50%; background: #fff; display: grid; place-items: center; }
+  .alert .k { font-size: 12.5px; opacity: .8; }
+  .alert .v { font-size: 15.5px; font-weight: 500; }
+
+  /* farms */
+  .farms { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .farm { background: var(--tile); border-radius: 18px; padding: 16px 16px 14px; border-left: 3px solid transparent; }
+  .farm.online { border-left-color: var(--green); }
+  .farm.offline { border-left-color: var(--red); }
+  .farm .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .farm .title { font-size: 18px; font-weight: 500; }
+  .kv { font-size: 13.5px; line-height: 1.75; }
+  .kv b { font-weight: 600; }
+  .kv span { color: var(--muted); }
+  .bar { height: 8px; border-radius: 999px; background: #e3e7dd; overflow: hidden; margin: 10px 0 4px; display: flex; }
+  .bar i { display: block; height: 100%; }
+  .bar .used { background: var(--green); } .bar .sent { background: var(--yellow); } .bar .res { background: #9bb68a; }
+  .legend { display: flex; gap: 10px; font-size: 11.5px; color: var(--muted); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+  .farm .avail { font-size: 34px; font-weight: 300; letter-spacing: -1px; margin-top: 8px; }
+  .farm .avail small { font-size: 14px; color: var(--muted); letter-spacing: 0; }
+  .farm .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .farm .actions .btn { height: 32px; font-size: 12.5px; padding: 0 12px; flex: 1; justify-content: center; }
+  .moist { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .moist .m { flex: 1; height: 5px; border-radius: 999px; background: #e3e7dd; overflow: hidden; }
+  .moist .m i { display: block; height: 100%; background: linear-gradient(90deg, #7dd3f0, #2c9ad6); }
+
+  /* chart */
+  .chart { height: 210px; display: flex; align-items: flex-end; gap: 18px; padding: 10px 6px 0; border-bottom: 1px dashed var(--line); }
+  #usage { overflow: hidden; }
+  .chart.many, .xl.many { gap: 6px; }
+  .col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; justify-content: flex-end; }
+  .col .b { width: 100%; max-width: 64px; border-radius: 12px 12px 6px 6px; background: var(--green-soft); transition: height .8s; position: relative; }
+  .col .b.max { background: var(--green-2); }
+  .col .b em { position: absolute; top: -26px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 12px;
+               background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+  .xl { display: flex; gap: 18px; padding: 8px 6px 0; } .xl span { flex: 1; min-width: 0; text-align: center; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chart.many .col .b em { font-size: 10px; padding: 1px 4px; }
+
+  /* activity */
+  .feed { display: grid; gap: 10px; max-height: 300px; overflow: auto; }
+  .ev { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; }
+  .ev .dot { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--green-pale); }
+  .ev .dot.bad { background: #fde7e7; } .ev .dot.tr { background: var(--yellow-pale); }
+  .ev .t { font-size: 14px; font-weight: 500; } .ev .d { font-size: 12px; color: var(--muted); }
+  .ev .ix { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* transfer form */
+  .form { display: grid; gap: 12px; }
+  .form label { font-size: 12.5px; color: var(--muted); display: block; margin-bottom: 6px; }
+  .form select, .form input { width: 100%; height: 42px; border-radius: 12px; border: 1px solid var(--line); background: var(--tile);
+          font: inherit; font-size: 15px; padding: 0 12px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .result { border-radius: 14px; padding: 12px 14px; font-size: 13.5px; background: var(--yellow-pale); min-height: 46px; }
+  .result.ok { background: var(--green-pale); } .result.bad { background: #fde7e7; }
+
+  /* status + how-it-works */
+  .status { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 18px; background: var(--green-pale); }
+  .status .ico { width: 44px; height: 44px; border-radius: 50%; background: #fff; display: grid; place-items: center; flex: none; }
+  .status .t { font-size: 19px; font-weight: 600; } .status .d { font-size: 14px; color: #4d5a45; margin-top: 2px; }
+  .status.warn { background: var(--yellow-pale); } .status.bad { background: #fde7e7; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 16px; }
+  .step { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; padding: 12px; border-radius: 14px; border: 1px dashed #d5dccb; }
+  .step .n { width: 30px; height: 30px; border-radius: 50%; background: var(--black); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+  .step b { display: block; font-size: 14px; font-weight: 600; } .step span { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .help { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted);
+          font-size: 14px; font-weight: 700; cursor: help; flex: none; }
+  .explain { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .explain b { color: var(--ink); font-weight: 600; }
+  .synced { color: var(--green-2) !important; font-weight: 600; } .waiting { color: #a07c00 !important; font-weight: 600; }
+  /* demo scenarios */
+  .demo-card { background: var(--black); color: #fff; }
+  .demo-card .sub { color: rgba(255,255,255,.65); }
+  .demo-card .help { border-color: rgba(255,255,255,.25); color: rgba(255,255,255,.7); }
+  .scen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .sc { background: #32372f; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .sc .top { display: flex; gap: 10px; align-items: center; }
+  .sc .n { width: 28px; height: 28px; border-radius: 50%; background: var(--green); display: grid; place-items: center;
+           font-size: 13px; font-weight: 700; flex: none; }
+  .sc h4 { margin: 0; font-size: 16px; font-weight: 600; }
+  .sc p { margin: 0; font-size: 12.5px; color: rgba(255,255,255,.7); line-height: 1.45; }
+  .sc .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+  .sc .acts .btn { height: 32px; font-size: 12.5px; padding: 0 12px; background: var(--green); box-shadow: none; }
+  .sc .acts .btn.ghost { background: rgba(255,255,255,.12); }
+  .sc .acts select { height: 32px; border-radius: 10px; border: 0; background: rgba(255,255,255,.12); color: #fff; font: inherit; font-size: 12.5px; padding: 0 8px; }
+  .sc .acts select option { color: #000; }
+  .out { display: none; font-size: 12.5px; line-height: 1.45; border-radius: 12px; padding: 10px 12px; background: rgba(255,255,255,.08); }
+  .out.show { display: block; } .out.ok { background: rgba(92,193,38,.22); } .out.bad { background: rgba(229,72,77,.25); }
+  .out.wait { background: rgba(247,228,109,.18); }
+  .out ul { margin: 6px 0 0; padding-left: 0; list-style: none; } .out li { margin: 3px 0; }
+  .out .big { font-size: 22px; font-weight: 300; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
+          border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -1px; margin-right: 6px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  .cap-note { font-size: 12px; color: var(--yellow); }
+  /* results */
+  .res-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .res-tiles .tile { min-height: 150px; }
+  .res-tiles .tile .big { font-size: 40px; }
+  .pass { display: inline-block; background: var(--green); color: #fff; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: 2px; }
+  .charts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 16px; }
+  .charts figure { margin: 0; background: var(--tile); border-radius: 16px; padding: 10px; }
+  .charts img { width: 100%; display: block; border-radius: 10px; background: #fff; cursor: zoom-in; }
+  .charts figcaption { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .zoom { position: fixed; inset: 0; background: rgba(20,25,18,.75); display: none; place-items: center; z-index: 50; padding: 30px; cursor: zoom-out; }
+  .zoom img { max-width: 100%; max-height: 100%; border-radius: 14px; background: #fff; }
+  /* tabs */
+  nav.tabs { display: flex; flex-direction: row; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+  nav.tabs a.tablink { width: auto; height: 42px; display: inline-flex; place-items: initial; white-space: nowrap; transform: none; }
+  .tabs button, .tablink { height: 42px; padding: 0 18px; border-radius: 12px; border: 0; background: var(--card); font: inherit;
+    font-size: 15px; font-weight: 600; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    text-decoration: none; box-shadow: 0 1px 0 var(--line); }
+  .tabs button svg { width: 14px; height: 14px; }
+  .tabs button.active { background: var(--black); color: #fff; }
+  .tabs button[data-tab="demo"]:not(.active) { background: var(--green); color: #fff; }
+  .tab { display: none; gap: 20px; } .tab.show { display: grid; }
+  main > .status { margin-bottom: 0; }
+  .row2b { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .flow { width: 100%; margin-top: 18px; border-radius: 14px; border: 1px solid var(--line); cursor: zoom-in; }
+  /* demo layout */
+  .demo-grid { display: grid; grid-template-columns: 250px minmax(0, 1fr) 330px; gap: 20px; align-items: start; }
+  .scen-list .item { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 10px; border-radius: 12px;
+    cursor: pointer; margin-top: 6px; font-size: 14.5px; font-weight: 500; }
+  .scen-list .item:hover { background: var(--tile); }
+  .scen-list .item.sel { background: var(--black); color: #fff; }
+  .scen-list .item .n { width: 28px; height: 28px; border-radius: 50%; background: var(--tile); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+  .scen-list .item.sel .n { background: var(--green); color: #fff; }
+  .scen-list .mark { font-size: 13px; font-weight: 700; color: var(--green-2); } .scen-list .item.sel .mark { color: var(--green-soft); }
+  .scen-list .mark.bad { color: var(--red); }
+  #scenDetail { min-height: 520px; display: flex; flex-direction: column; gap: 14px; }
+  #scenDetail .step-no { font-size: 13px; font-weight: 600; color: var(--green-soft); letter-spacing: .5px; text-transform: uppercase; }
+  #scenDetail h2 { font-size: 30px; }
+  #scenDetail .what { font-size: 16px; line-height: 1.55; color: rgba(255,255,255,.88); margin: 0; }
+  #scenDetail .watch { background: rgba(255,255,255,.07); border-radius: 14px; padding: 12px 14px; font-size: 14px; line-height: 1.5; }
+  #scenDetail .watch b { color: var(--green-soft); }
+  #scenDetail .acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #scenDetail .acts .btn { height: 42px; font-size: 14.5px; padding: 0 18px; background: var(--green); box-shadow: none; }
+  #scenDetail .acts .btn.ghost { background: rgba(255,255,255,.14); }
+  #scenDetail .acts select { height: 42px; border-radius: 10px; border: 0; background: rgba(255,255,255,.14); color: #fff; font: inherit; padding: 0 10px; }
+  #scenDetail .acts select option { color: #000; }
+  #scenDetail .out { font-size: 15px; padding: 14px 16px; }
+  #scenDetail .out .big { font-size: 34px; }
+  #scenDetail .nav { margin-top: auto; display: flex; justify-content: space-between; }
+  #scenDetail .nav button { background: none; border: 0; color: rgba(255,255,255,.7); font: inherit; font-size: 14px; cursor: pointer; }
+  #scenDetail .nav button:hover { color: #fff; }
+  .live h4 { margin: 16px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+  .lrow { display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .lrow:last-child { border-bottom: 0; }
+  .lrow .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
+  .lrow .dot.off { background: var(--red); } .lrow .dot.warn { background: #e0b400; }
+  .lrow small { color: var(--muted); font-size: 12px; display: block; }
+  .lrow .r { font-size: 12.5px; color: var(--muted); text-align: right; }
+  .lrow .r b { color: var(--ink); font-size: 14px; }
+  .foot { text-align: right; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .offline-banner { display: none; background: #fde7e7; color: var(--red); padding: 10px 14px; border-radius: 12px; font-size: 14px; }
+
+  @media (max-width: 1200px) { .demo-grid { grid-template-columns: 1fr; } .row2b { grid-template-columns: 1fr; } .scen, .res-tiles, .charts { grid-template-columns: repeat(2, 1fr); } .steps { grid-template-columns: repeat(2, 1fr); } .tiles, .farms { grid-template-columns: repeat(2, 1fr); } .row2, .row3 { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { body { padding: 8px; } .frame { padding: 16px 12px; border-radius: 24px; } header { flex-wrap: wrap; } header h1 { font-size: 20px; }
+    .two { grid-template-columns: 1fr; } .status { align-items: flex-start; } .shell { grid-template-columns: 1fr; } nav { flex-direction: row; overflow: auto; }
+    nav .bottom { margin-top: 0; } .tiles, .farms, .steps, .scen, .res-tiles, .charts { grid-template-columns: 1fr; } header .pill.hide-s { display: none; } }
+</style>
+</head>
+<body>
+<div class="frame">
+  <header>
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3c3 4 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0C6.5 10 9 7 12 3z"/><path d="M9.5 14.5c.6 1.2 1.5 1.8 2.5 1.8"/></svg>
+    </div>
+    <h1>AquaShare Monitoring</h1>
+    <div class="spacer"></div>
+    <span class="pill hide-s"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg><span id="day">—</span></span>
+    <span class="pill hide-s"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span id="clock">—</span></span>
+    <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 6 6 .9-4.5 4.3 1 6.3L12 16.6 6.5 19.5l1-6.3L3 8.9 9 8z"/></svg>Leader <b id="leaderPill">—</b></span>
+    <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>Alerts <span class="badge" id="alertCount">0</span></span>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="overview" class="active">Overview</button>
+    <button data-tab="demo"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>Demo</button>
+    <button data-tab="farms">Farms</button>
+    <button data-tab="ledger">Ledger</button>
+    <button data-tab="results">Test results</button>
+    <button data-tab="how">How it works</button>
+    <span class="spacer"></span>
+    <a class="tablink" href="http://localhost:3300" target="_blank">Grafana ↗</a>
+  </nav>
+
+  <main id="top">
+    <div class="offline-banner" id="banner">The dashboard cannot reach the system right now. Retrying…</div>
+    <div class="status" id="status"><div class="ico" id="statusIco"></div><div><div class="t" id="statusT">Loading…</div><div class="d" id="statusD"></div></div></div>
+
+    <!-- ============================== OVERVIEW -->
+    <div class="tab show" id="tab-overview">
+      <section class="card">
+        <div class="head"><div><h2>Today at a glance</h2><div class="sub">One reservoir shared between four farms</div></div></div>
+        <div class="tiles">
+          <div class="tile hero"><div class="label">Water Released Today</div><div class="big" id="limit">—<small>L</small></div>
+            <div class="note" id="limitNote">Reservoir release for today</div></div>
+          <div class="tile"><div class="label">Given to Farms</div><div class="big" id="alloc">—<small>%</small></div>
+            <div class="note" id="allocNote">—</div></div>
+          <div class="tile"><div class="label">Used So Far</div><div class="big" id="used">—<small>L</small></div>
+            <div class="note" id="usedNote">—</div></div>
+          <div class="tile"><div class="label">Ledger Servers Up</div><div class="big" id="nodesUp">—<small>/3</small></div>
+            <div class="note" id="nodesNote">—</div></div>
+        </div>
+      </section>
+      <div class="row2">
+        <section class="card res-card">
+          <div class="head">
+            <div><h2>Water Left Today</h2><div class="sub">How much of the farms’ shares has not been used yet</div></div>
+            <span class="pill" style="background:var(--tile)"><span id="farmsOnline">—</span> farms online</span>
+          </div>
+          <div class="reservoir">
+            <span class="tag t1" id="tagUsed">Used —</span>
+            <span class="tag t2" id="tagMoved">Transferred —</span>
+            <span class="tag t3" id="tagCommit">Entry —</span>
+            <div class="soil"></div><div class="grass"></div>
+            <div class="tank">
+              <div class="water" id="water" style="height:60%">
+                <svg viewBox="0 0 1200 20" preserveAspectRatio="none"><path d="M0 10 Q 75 0 150 10 T 300 10 T 450 10 T 600 10 T 750 10 T 900 10 T 1050 10 T 1200 10 V20 H0z" fill="#7dd3f0"/></svg>
+              </div>
+              <div class="level" id="level"><div class="num" id="levelPct">—%</div><div class="lbl" id="levelL">— L left</div></div>
+            </div>
+          </div>
+        </section>
+        <section class="card alerts">
+          <h3>Alerts</h3><div class="sub">Problems right now, in plain words</div>
+          <div id="alerts" style="margin-top:8px"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ============================== DEMO -->
+    <div class="tab" id="tab-demo">
+      <div class="demo-grid">
+        <section class="card scen-list">
+          <h3>Scenarios</h3><div class="sub">Run them in this order</div>
+          <div id="scenList"></div>
+        </section>
+        <section class="card demo-card" id="scenDetail"></section>
+        <section class="card live">
+          <h3>Live view</h3><div class="sub">Watch this while you click</div>
+          <div id="live"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ============================== FARMS -->
+    <div class="tab" id="tab-farms">
+      <section class="card" id="farms">
+        <div class="head"><div><h2>Farms</h2><div class="sub">Each farm spends only its own share, online or offline</div></div></div>
+        <div class="farms" id="farmCards"></div>
+      </section>
+      <div class="row2b">
+        <section class="card" id="usage">
+          <div class="head"><div><h3>Water Used per Farm</h3><div class="sub">Litres each farm has watered today</div></div><div class="help" title="Taken from the ledger, so it only includes usage the farms have already reported. An offline farm’s usage appears when it reconnects.">?</div></div>
+          <div class="chart" id="chart"></div><div class="xl" id="chartX"></div>
+        </section>
+        <section class="card" id="transfer">
+          <div class="head"><div><h3>Send Water</h3><div class="sub">Give part of one farm’s share to another farm</div></div></div>
+          <div class="form">
+            <div class="two">
+              <div><label>From</label><select id="from"></select></div>
+              <div><label>To</label><select id="to"></select></div>
+            </div>
+            <div><label>Amount (litres)</label><input id="amount" type="number" min="1" value="200"></div>
+            <button class="btn green" id="send" style="justify-content:center;height:44px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h13l-4-4M17 17H4l4 4"/></svg>Send transfer</button>
+            <div class="result" id="result">Pick two farms and an amount.</div>
+            <div class="explain">The water is first <b>put on hold</b> at the sender, then <b>saved by the ledger</b>, then confirmed. If the network fails midway it is retried, never sent twice.</div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ============================== LEDGER -->
+    <div class="tab" id="tab-ledger">
+      <div class="row2b">
+        <section class="card" id="cluster">
+          <div class="head"><div><h3>Ledger: 3 Copies</h3><div class="sub">A change counts only when at least 2 of the 3 servers save it</div></div></div>
+          <div class="nodes" id="nodes"></div>
+          <div class="merkle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3d9512" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+            <div><b id="rootNote">—</b><div class="sub" style="margin:0;font-size:12px">Fingerprint of the whole ledger (Merkle root): <code id="root">—</code></div></div></div>
+          <div class="explain"><b>Leader</b> receives every request and copies it to the others. <b>Followers</b> keep identical copies and choose a new leader if it fails. <b>Records</b> = entries saved so far. <b>Election round</b> goes up by one each time a new leader is chosen.</div>
+        </section>
+        <section class="card" id="activity">
+          <div class="head"><div><h3>Ledger Activity</h3><div class="sub">The latest records saved, newest first</div></div></div>
+          <div class="feed" id="feed"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ============================== RESULTS -->
+    <div class="tab" id="tab-results">
+      <section class="card" id="results">
+        <div class="head"><div><h2>Test Results</h2><div class="sub">The long tests run from the terminal; these are their saved results</div></div>
+          <div class="help" title="Unit tests: python -m pytest -q · Partition: python scripts/partition_test.py · Chaos: python scripts/chaos_test.py · Benchmark: python scripts/benchmark.py">?</div></div>
+        <div class="res-tiles" id="resTiles"></div>
+        <div class="charts" id="resCharts"></div>
+      </section>
+    </div>
+
+    <!-- ============================== HOW IT WORKS -->
+    <div class="tab" id="tab-how">
+      <section class="card">
+        <div class="head"><div><h2>How AquaShare works</h2><div class="sub">The whole idea in four steps</div></div></div>
+        <div class="steps">
+          <div class="step"><div class="n">1</div><div><b>The day opens</b><span>The ledger releases the reservoir’s daily water and gives each farm its share.</span></div></div>
+          <div class="step"><div class="n">2</div><div><b>Farms irrigate</b><span>Each farm spends only its own share, so it keeps working even without network.</span></div></div>
+          <div class="step"><div class="n">3</div><div><b>Farms share water</b><span>A farm with spare water can send some of it to another farm.</span></div></div>
+          <div class="step"><div class="n">4</div><div><b>The ledger keeps score</b><span>Every use and transfer is saved on 3 servers, so nothing is lost or counted twice.</span></div></div>
+        </div>
+        <img class="flow" src="/flowchart.png" alt="AquaShare flowchart" onclick="zoomImg(this.src)" onerror="this.style.display='none'">
+      </section>
+    </div>
+
+    <div class="zoom" id="zoom" onclick="this.style.display='none'"><img id="zoomImg" alt=""></div>
+    <div class="foot" id="foot">—</div>
+  </main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => n == null ? "—" : Number(n).toLocaleString("en-US");
+const ICON = {
+  leaf: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3d9512" stroke-width="2"><path d="M11 20A7 7 0 0 1 4 13c0-6 5-9 16-9 0 11-3 16-9 16z"/><path d="M4 20c4-4 7-6 11-8"/></svg>',
+  drop: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2c9ad6" stroke-width="2"><path d="M12 3c3 4 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0C6.5 10 9 7 12 3z"/></svg>',
+  plug: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e5484d" stroke-width="2"><path d="M2 2l20 20M9 2v4M15 2v4M6 6h9M18 10v1a6 6 0 0 1-9.5 4.9M6 10v1a6 6 0 0 0 .8 3"/><path d="M12 17v5"/></svg>',
+  server: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/></svg>',
+  ok: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3d9512" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg>',
+  tr: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a88a00" stroke-width="2"><path d="M7 7h13l-4-4M17 17H4l4 4"/></svg>',
+  use: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3d9512" stroke-width="2"><path d="M12 3c3 4 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0C6.5 10 9 7 12 3z"/></svg>',
+  bad: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e5484d" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  day: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3d9512" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18"/></svg>',
+};
+let data = null, busy = false;
+
+function clock() { $("clock").textContent = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}); }
+setInterval(clock, 1000); clock();
+
+async function refresh() {
+  if (busy) return;
+  try {
+    const r = await fetch("/api/overview", {cache: "no-store"});
+    data = await r.json(); $("banner").style.display = "none"; render();
+  } catch (e) { $("banner").style.display = "block"; }
+}
+
+function render() {
+  const st = data.state || {farms: []}, farms = st.farms || [];
+  const limit = st.limit_l || 0, alloc = st.total_allocated || 0, used = st.total_consumed || 0;
+  const moved = farms.reduce((s, f) => s + (f.sent || 0), 0);
+  const nodes = Object.entries(data.ledgers);
+  const up = nodes.filter(([, s]) => s);
+  const leader = up.length >= 2 ? up.find(([, s]) => s.role === "leader") : null;   // one node alone is not a majority
+  const online = Object.values(data.farms).filter(f => f.sync && f.sync.online).length;
+
+  $("day").textContent = st.day || "no day open";
+  $("leaderPill").textContent = leader ? leader[0] : "none";
+  $("limit").innerHTML = `${fmt(limit)}<small>L</small>`;
+  $("limitNote").textContent = `The reservoir’s limit for ${st.day || "today"}`;
+  $("alloc").innerHTML = `${limit ? Math.round(alloc / limit * 100) : 0}<small>%</small>`;
+  $("allocNote").textContent = `${fmt(alloc)} L split between ${farms.length} farms, ${fmt(limit - alloc)} L kept in reserve`;
+  $("used").innerHTML = `${fmt(used)}<small>L</small>`;
+  $("usedNote").textContent = `${alloc ? (used / alloc * 100).toFixed(1) : 0}% of the farms’ shares, as reported to the ledger`;
+  $("nodesUp").innerHTML = `${up.length}<small>/3</small>`;
+  $("nodesNote").textContent = up.length === 3 ? "All copies online" : up.length === 2 ? "Still works: 2 of 3 is a majority" : "Paused: needs at least 2 servers";
+
+  const left = Math.max(0, alloc - used), pct = alloc ? left / alloc * 100 : 0;
+  $("water").style.height = Math.max(6, pct) + "%";
+  $("level").className = "level" + (pct < 45 ? " dark" : "");
+  $("levelPct").textContent = Math.round(pct) + "%";
+  $("levelL").textContent = `${fmt(left)} L left today`;
+  $("tagUsed").textContent = `Used ${fmt(used)} L`;
+  $("tagMoved").textContent = `Shared between farms ${fmt(moved)} L`;
+  $("tagCommit").textContent = leader ? `${fmt(leader[1].commit_index)} records saved` : "Ledger paused";
+  $("farmsOnline").textContent = `${online}/${Object.keys(data.farms).length}`;
+
+  // overall status sentence
+  const offline = Object.entries(data.farms).filter(([, f]) => !f.sync || !f.sync.online).map(([n]) => n);
+  let sc = "", si = ICON.ok, stT = "Everything is working", stD = `All ${nodes.length} ledger servers agree and all ${Object.keys(data.farms).length} farms are connected.`;
+  if (!leader) { sc = "bad"; si = ICON.plug; stT = "The ledger is paused"; stD = "Fewer than 2 of the 3 servers are up. Farms keep irrigating from their own shares; nothing is lost."; }
+  else if (up.length < nodes.length || offline.length) {
+    sc = "warn"; si = ICON.drop; stT = "Working, with a problem";
+    const parts = [];
+    if (up.length < nodes.length) parts.push(`${nodes.length - up.length} ledger server${nodes.length - up.length > 1 ? "s" : ""} down (2 of 3 is still enough)`);
+    if (offline.length) parts.push(`${offline.join(", ")} offline but still irrigating`);
+    stD = parts.join(" · ") + ".";
+  }
+  if (!st.day) { sc = "warn"; stT = "No day is open yet"; stD = "Open a day so the ledger can give each farm its share."; }
+  $("status").className = "status " + sc; $("statusIco").innerHTML = si; $("statusT").textContent = stT; $("statusD").textContent = stD;
+
+  // cluster
+  const roots = new Set(up.map(([, s]) => s.merkle_root).filter(Boolean));
+  $("nodes").innerHTML = nodes.map(([name, s]) => s ? `
+    <div class="node"><div class="ico">${ICON.server}</div>
+      <div><div class="name">${name}</div><div class="meta" title="term = election round · last hash = fingerprint of the newest record">${fmt(s.commit_index)} records · election round ${s.term} · hash ${String(s.last_log_hash || "").slice(0, 8)}</div></div>
+      <span class="chip ${s.role === "leader" ? "leader" : ""}">${s.role}</span></div>` : `
+    <div class="node isdown"><div class="ico">${ICON.server}</div><div><div class="name">${name}</div><div class="meta">stopped or unreachable, the others carry on</div></div>
+      <span class="chip down">down</span></div>`).join("");
+  const anyRoot = up.find(([, s]) => s.merkle_root);
+  $("root").textContent = anyRoot ? anyRoot[1].merkle_root.slice(0, 16) + "…" : "—";
+  $("rootNote").textContent = roots.size === 1 ? `All ${up.length} copies are identical` : roots.size ? "A copy is catching up with the leader" : "—";
+
+  // alerts
+  const alerts = [];
+  nodes.filter(([, s]) => !s).forEach(([n]) => alerts.push([ICON.plug, "Ledger server down", `${n} is down, the other copies keep working`]));
+  if (!leader) alerts.push([ICON.plug, "Ledger paused", "Fewer than 2 servers: new records wait"]);
+  Object.entries(data.farms).forEach(([n, f]) => {
+    if (!f.sync) alerts.push([ICON.plug, "Farm", `${n} is not reachable`]);
+    else if (!f.sync.online) alerts.push([ICON.plug, "Farm offline", `${n} has no network but keeps irrigating. ${f.sync.pending_events} updates will be sent when it reconnects`]);
+    if (f.sensors && f.sensors.quota_exhausted) alerts.push([ICON.drop, "Share used up", `${n} used its whole share and stopped watering`]);
+  });
+  $("alertCount").textContent = alerts.length;
+  $("alertCount").className = "badge" + (alerts.length ? "" : " ok");
+  $("alerts").innerHTML = (alerts.length ? alerts : [[ICON.ok, "All clear", "Every node and farm is healthy"]]).slice(0, 4)
+    .map(([i, k, v]) => `<div class="alert"><div class="ico">${i}</div><div><div class="k">${k}</div><div class="v">${v}</div></div></div>`).join("");
+
+  // farms
+  $("farmCards").innerHTML = Object.entries(data.farms).map(([name, f]) => {
+    const w = f.wallet || {}, s = f.sync || {}, se = f.sensors || {};
+    const total = (w.allocated || 0) + (w.received || 0) || 1;
+    const p = v => Math.max(0, Math.min(100, (v || 0) / total * 100));
+    const isOn = s.online, reach = !!f.sync;
+    return `<div class="farm ${reach && isOn ? "online" : "offline"}">
+      <div class="top"><div class="title">${name}</div><span class="chip ${reach && isOn ? "leader" : "down"}">${!reach ? "unreachable" : isOn ? "online" : "offline"}</span></div>
+      <div class="kv"><b>Valve:</b> <span>${se.valve_open ? "open, watering" : "closed"}</span><br>
+        <b>Share today:</b> <span>${fmt(w.allocated)} L</span>${w.received ? ` · <b>Got:</b> <span>+${fmt(w.received)} L</span>` : ""}<br>
+        ${!s.pending_events ? `<span class="synced">✓ Up to date with the ledger</span>` : `<span class="waiting">${s.pending_events} updates waiting to be sent</span>`}</div>
+      <div class="bar"><i class="used" style="width:${p(w.consumed)}%"></i><i class="sent" style="width:${p(w.sent)}%"></i><i class="res" style="width:${p(w.reserved)}%"></i></div>
+      <div class="legend"><span><i style="background:var(--green)"></i>used ${fmt(w.consumed)}</span><span><i style="background:var(--yellow)"></i>given away ${fmt(w.sent)}</span>${w.reserved ? `<span><i style="background:#9bb68a"></i>on hold ${fmt(w.reserved)}</span>` : ""}</div>
+      <div class="avail">${fmt(w.available)}<small> L still available</small></div>
+      <div class="moist">soil moisture <div class="m"><i style="width:${se.soil_moisture || 0}%"></i></div>${se.soil_moisture != null ? Math.round(se.soil_moisture) + "%" : "—"}</div>
+      <div class="actions">
+        <button class="btn ${isOn ? "light" : ""}" title="${s.link === "down" ? "Restore the network: waiting updates are sent to the ledger" : "Simulate a network failure for this farm"}" onclick="act('${name}','link','${s.link === "down" ? "up" : "down"}')" ${reach ? "" : "disabled"}>${s.link === "down" ? "Reconnect" : "Cut link"}</button>
+        <button class="btn light" onclick="act('${name}','irrigation','${se.irrigation_enabled ? "off" : "on"}')" ${reach ? "" : "disabled"}>${se.irrigation_enabled ? "Stop watering" : "Start watering"}</button>
+      </div></div>`;
+  }).join("");
+
+  // chart
+  // show the real farms only (a benchmark or chaos day adds test farms)
+  const known = farms.filter(f => f.farm_id in data.farms);
+  const shown = known.length ? known : farms;
+  const many = shown.length > 5;
+  $("chart").className = "chart" + (many ? " many" : ""); $("chartX").className = "xl" + (many ? " many" : "");
+  const maxUsed = Math.max(1, ...shown.map(f => f.consumed));
+  $("chart").innerHTML = shown.map(f => `<div class="col"><div class="b ${f.consumed === maxUsed && f.consumed > 0 ? "max" : ""}" style="height:${Math.max(4, f.consumed / maxUsed * 85)}%"><em>${fmt(f.consumed)} L</em></div></div>`).join("");
+  $("chartX").innerHTML = shown.map(f => `<span title="${f.farm_id}">${many ? f.farm_id.replace(/^(\w)\w*-/, "$1") : f.farm_id}</span>`).join("");
+
+  // transfer selects (only fill once)
+  if (!$("from").options.length) {
+    const names = Object.keys(data.farms);
+    $("from").innerHTML = names.map(n => `<option>${n}</option>`).join("");
+    $("to").innerHTML = names.map((n, i) => `<option ${i === 1 ? "selected" : ""}>${n}</option>`).join("");
+  }
+
+  // activity
+  $("feed").innerHTML = data.activity.map(a => {
+    let ic = ICON.use, cls = "", title = "", desc = a.day || "";
+    if (!a.ok) { ic = ICON.bad; cls = "bad"; title = a.type === "transfer" ? `Transfer refused` : `Request refused`; desc = a.error || ""; }
+    else if (a.type === "transfer") { ic = ICON.tr; cls = "tr"; title = `${a.farm} gave ${fmt(a.amount)} L to ${a.recipient}`; desc = a.day || ""; }
+    else if (a.type === "record_consumption") { title = `${a.farm} watered ${fmt(a.amount)} L`; }
+    else if (a.type === "open_day") { ic = ICON.day; title = `Day ${a.day} opened`; desc = "every farm received its share"; }
+    else { title = a.type.replace("_", " "); desc = a.farm || ""; }
+    return `<div class="ev"><div class="dot ${cls}">${ic}</div><div><div class="t">${title}</div><div class="d">${desc}</div></div><div class="ix" title="Record number in the ledger">#${fmt(a.index)}</div></div>`;
+  }).join("") || '<div class="sub">No entries yet.</div>';
+
+  renderLive(leader, up, nodes);
+  if (!$("scenList").innerHTML) { renderList(); renderDetail(); }
+  else if (sel === "offline" && $("offFarm") && !$("offFarm").options.length) renderDetail();
+  updateOffline();
+  $("foot").textContent = `Live · refreshed ${new Date().toLocaleTimeString()} · gathered in ${data.took_ms} ms`;
+}
+
+async function act(farm, action, state) {
+  busy = true;
+  try { await fetch(`/api/farms/${farm}/${action}/${state}`, {method: "POST"}); } finally { busy = false; refresh(); }
+}
+
+$("send").onclick = async () => {
+  const body = {sender: $("from").value, recipient: $("to").value, amount_l: Number($("amount").value)};
+  const box = $("result");
+  if (body.sender === body.recipient) { box.className = "result bad"; box.textContent = "Choose two different farms."; return; }
+  $("send").disabled = true; box.className = "result"; box.textContent = "Putting the water on hold and asking the ledger to save it…";
+  try {
+    const r = await (await fetch("/api/transfer", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)})).json();
+    if (r.status === "committed") { box.className = "result ok"; box.textContent = `Done. Saved as record #${fmt(r.committed_index)}. ${body.recipient} receives the water on its next sync (a few seconds).`; }
+    else if (r.status === "pending") { box.className = "result"; box.textContent = `Waiting: ${r.reason}. The water stays on hold and the transfer is retried automatically.`; }
+    else { box.className = "result bad"; box.textContent = `Not sent: ${r.reason || r.detail}`; }
+  } catch (e) { box.className = "result bad"; box.textContent = "Could not reach the dashboard server."; }
+  $("send").disabled = false; refresh();
+};
+
+
+// ------------------------------------------------------------------ tabs
+function showTab(name) {
+  if (!$("tab-" + name)) name = "overview";
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("show", t.id === "tab-" + name));
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+}
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+showTab(location.hash.slice(1) || "overview");
+
+// ------------------------------------------------------------------ demo scenarios
+const esc = t => String(t ?? "").replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]));
+let canControl = true;
+const SCEN = [
+  {key: "day", title: "Start a new day",
+   what: "Opens the next day and gives every farm a fresh share of the reservoir: 6,000 / 5,000 / 4,500 / 4,000 litres. Start every demo with this.",
+   watch: "In the <b>live view</b>, the farms’ available water jumps back to their full share within a few seconds.",
+   acts: [["Open next day", "call('day','POST','new-day')"]]},
+  {key: "offline", title: "A farm goes offline",
+   what: "Cuts one farm’s network. The farm keeps watering from its own share and stores its updates. When it reconnects, the updates are sent and each one is counted only once.",
+   watch: "In the <b>live view</b>, the farm turns <b>red</b> and its number of waiting updates grows. After <b>Reconnect</b> it goes back to 0.",
+   acts: [["select"], ["Cut link", "offline('down')"], ["Reconnect", "offline('up')", "ghost"]]},
+  {key: "dup", title: "Same transfer twice",
+   what: "Sends a transfer that is already saved again, twice, with the same ID, exactly like a network retry would. The ledger must recognise it and change nothing.",
+   watch: "Both copies are marked <b>duplicate</b> and the amount the farm has sent stays the same.",
+   acts: [["Re-send twice", "call('dup','POST','duplicate')"]]},
+  {key: "over", title: "Spend too much",
+   what: "Asks a farm to give away more water than it has: first at the farm itself, then directly at the ledger. Both must refuse.",
+   watch: "Two refusals, and <b>no water moves</b>.",
+   acts: [["Try to overspend", "call('over','POST','overspend')"]]},
+  {key: "kill", title: "Crash the leader", docker: true,
+   what: "Stops the server that leads the ledger, without warning. The other two notice and elect a new leader by themselves. Nothing that was saved is lost.",
+   watch: "In the <b>live view</b>, another server becomes <b>leader</b> after about 2 seconds. Then press <b>Restart it</b>: the old leader comes back as a follower.",
+   acts: [["Crash leader", "call('kill','POST','kill-leader')"], ["Restart it", "call('kill','POST','restart-all')", "ghost"]]},
+  {key: "major", title: "Lose the majority", docker: true,
+   what: "Stops 2 of the 3 servers. One server alone is not a majority, so the ledger refuses to save anything instead of risking a wrong answer.",
+   watch: "1. <b>Stop 2 servers</b>: the status at the top turns <b>red</b>.<br>2. <b>Try a transfer</b>: it waits, with the water on hold.<br>3. <b>Restart all</b>: the transfer finishes by itself.",
+   acts: [["Stop 2 servers", "call('major','POST','lose-majority')"], ["Try a transfer", "tryTransfer()", "ghost"], ["Restart all", "call('major','POST','restart-all')", "ghost"]]},
+  {key: "proof", title: "Prove a record is real",
+   what: "Checks with a Merkle proof that the latest transfer really is in the ledger, without trusting the server. Then changes the amount on a copy: that copy must fail the check.",
+   watch: "<b>Verify</b> gives ✓ on every check. <b>Falsify &amp; verify</b> gives ✗, because the record no longer matches the ledger.",
+   acts: [["Verify", "call('proof','GET','proof')"], ["Falsify & verify", "call('proof','GET','proof?tamper=true')", "ghost"]]},
+  {key: "rules", title: "Check the 7 rules",
+   what: "Reads the 3 databases and checks the 7 rules that must always be true, for example “no farm used more than its share” and “all 3 copies are identical”.",
+   watch: "Seven ✓ means the system is still correct after everything you just did.",
+   acts: [["Check rules", "call('rules','GET','invariants')"]]},
+];
+let sel = "day";
+const RES = {};
+const RUNNING = {day: "Opening the next day…", dup: "Re-sending the transfer…", over: "Asking for too much water…",
+  kill: "Working…", major: "Working…", proof: "Fetching the proof and checking it…", rules: "Checking the 3 databases…"};
+
+function renderList() {
+  $("scenList").innerHTML = SCEN.map((c, i) => {
+    const r = RES[c.key];
+    const mark = !r ? "" : r.cls === "ok" ? "✓" : r.cls === "bad" ? "✗" : "…";
+    return `<div class="item ${c.key === sel ? "sel" : ""}" onclick="select('${c.key}')"><div class="n">${i + 1}</div><div>${c.title}</div>
+      <span class="mark ${r && r.cls === "bad" ? "bad" : ""}">${mark}</span></div>`;
+  }).join("");
+}
+function select(key) { sel = key; renderList(); renderDetail(); }
+function renderDetail() {
+  const i = SCEN.findIndex(c => c.key === sel), c = SCEN[i], r = RES[c.key];
+  const acts = c.acts.map(([label, fn, cls]) => label === "select"
+    ? `<select id="offFarm">${Object.keys(data?.farms || {}).map(n => `<option>${n}</option>`).join("")}</select>`
+    : `<button class="btn ${cls || ""}" onclick="${fn}" ${c.docker && !canControl ? "disabled" : ""}>${esc(label)}</button>`).join("");
+  const prevSel = $("offFarm")?.value;
+  $("scenDetail").innerHTML = `<div class="step-no">Scenario ${i + 1} of ${SCEN.length}</div><h2>${c.title}</h2>
+    <p class="what">${c.what}</p>
+    <div class="watch"><b>What to watch:</b><br>${c.watch}</div>
+    ${c.docker && !canControl ? `<div class="cap-note">Disabled: the dashboard has no access to Docker (see the docker.sock volume in docker-compose.yml).</div>` : ""}
+    <div class="acts">${acts}</div>
+    <div class="out ${r ? "show " + r.cls : ""}">${r ? r.html : ""}</div>
+    <div class="nav"><button onclick="select('${SCEN[Math.max(0, i - 1)].key}')" ${i ? "" : "style='visibility:hidden'"}>← Previous</button>
+      <button onclick="select('${SCEN[Math.min(SCEN.length - 1, i + 1)].key}')" ${i < SCEN.length - 1 ? "" : "style='visibility:hidden'"}>Next scenario →</button></div>`;
+  const off = $("offFarm");
+  if (off) off.value = prevSel || offlineFarm || Object.keys(data?.farms || {}).slice(-1)[0] || "";
+}
+function setRes(key, cls, html) { RES[key] = {cls, html}; renderList(); if (key === sel) renderDetail(); }
+
+async function call(key, method, path) {
+  setRes(key, "wait", `<span class="spin"></span>${RUNNING[key] || "Working…"}`);
+  let r;
+  try {
+    const res = await fetch("/api/demo/" + path, {method});
+    r = await res.json();
+    if (!res.ok) { setRes(key, "bad", esc(typeof r.detail === "string" ? r.detail : JSON.stringify(r.detail))); return; }
+  } catch (e) { setRes(key, "bad", "Could not reach the dashboard server."); return; }
+  setRes(key, r.ok === false ? "bad" : "ok", resultHtml(key, path, r));
+  refresh();
+}
+
+function resultHtml(key, path, r) {
+  if (path === "kill-leader" && r.ok)
+    return `<div class="big">${r.seconds} s</div><b>${esc(r.old_leader)}</b> crashed → <b>${esc(r.new_leader)}</b> became the new leader (election round ${r.new_term}).<br>The two remaining servers are a majority, so nothing saved is lost.`;
+  if (key === "dup" && r.replies)
+    return `${esc(r.message)}<ul>${r.replies.map(x => `<li>Copy ${x.attempt}: ${x.duplicate ? "✓ recognised as a duplicate" : "✗ applied again"}</li>`).join("")}</ul>`;
+  if (key === "over" && r.farm)
+    return `<ul><li>${r.ok ? "✓" : "✗"} The farm refused ${Number(r.farm.amount).toLocaleString()} L <span style="opacity:.7">(${esc(r.farm.answer)})</span></li>
+            <li>${r.ok ? "✓" : "✗"} The ledger refused ${Number(r.ledger.amount).toLocaleString()} L <span style="opacity:.7">(${esc(r.ledger.answer)})</span></li></ul>No water moved.`;
+  if (key === "proof" && r.checks)
+    return `<b>${r.tampered ? "Checked a falsified copy: " + esc(r.checked) : "Record #" + r.index + ": " + esc(r.record)}</b>
+            <ul>${r.checks.map(c => `<li>${c.skipped ? "–" : c.ok ? "✓" : "✗"} ${esc(c.name)}</li>`).join("")}</ul><b>${esc(r.message)}</b>
+            ${r.tampered ? `<div style="opacity:.75;margin-top:4px">The 3 servers still agree with each other. It is the falsified copy that does not match them.</div>` : ""}`;
+  if (key === "rules" && r.rows)
+    return `<b>${esc(r.message)}</b><ul>${r.rows.map(x => `<li>${x.ok ? "✓" : "✗"} ${esc(x.check)}</li>`).join("")}</ul>`;
+  return esc(r.message || JSON.stringify(r));
+}
+
+async function tryTransfer() {
+  const farms = Object.keys(data?.farms || {});
+  const [from, to] = [farms[0], farms[1]];
+  setRes("major", "wait", `<span class="spin"></span>${from} is sending 100 L to ${to}. Without a majority, the ledger cannot save it…`);
+  try {
+    const r = await (await fetch("/api/transfer", {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({sender: from, recipient: to, amount_l: 100})})).json();
+    if (r.status === "committed") setRes("major", "ok", `✓ Saved as record #${r.committed_index}: a majority of servers is running.`);
+    else if (r.status === "pending") setRes("major", "wait", `⏳ <b>Not saved yet</b> (${esc(r.reason)}).<br>The 100 L stay on hold at ${from} and the transfer is retried automatically. Now press <b>Restart all</b>.`);
+    else setRes("major", "bad", `Not sent: ${esc(r.reason || r.detail)}`);
+  } catch (e) { setRes("major", "bad", "Could not reach the dashboard server."); }
+  refresh();
+}
+
+let offlineFarm = null, watchingReconnect = false;
+async function offline(state) {
+  const farm = $("offFarm").value;
+  offlineFarm = farm;
+  await fetch(`/api/farms/${farm}/link/${state}`, {method: "POST"});
+  watchingReconnect = state === "up";
+  if (state === "up") setRes("offline", "wait", `<span class="spin"></span>${farm} reconnected: sending its waiting updates…`);
+  refresh();
+}
+function updateOffline() {
+  if (!offlineFarm || !data) return;
+  const f = data.farms[offlineFarm];
+  if (!f || !f.sync) return;
+  if (f.sync.link === "down")
+    setRes("offline", "wait", `<b>${offlineFarm} is offline</b> but still watering.<br><span class="big">${f.sync.pending_events}</span> updates waiting · ${fmt(f.wallet?.available)} L still available`);
+  else if (watchingReconnect) {
+    if (f.sync.pending_events) setRes("offline", "wait", `<span class="spin"></span>${offlineFarm} reconnected: ${f.sync.pending_events} updates left to send…`);
+    else { watchingReconnect = false; setRes("offline", "ok", `✓ <b>${offlineFarm} is back online</b> and up to date with the ledger. Each update was counted exactly once.`); }
+  }
+}
+
+function renderLive(leader, up, nodes) {
+  const farms = Object.entries(data.farms);
+  const lastRecords = data.activity.slice(0, 4).map(a => {
+    const t = !a.ok ? `${a.type === "transfer" ? "Transfer" : "Request"} refused`
+      : a.type === "transfer" ? `${a.farm} → ${a.recipient}: ${fmt(a.amount)} L`
+      : a.type === "record_consumption" ? `${a.farm} watered ${fmt(a.amount)} L`
+      : a.type === "open_day" ? `Day ${a.day} opened` : a.type.replace("_", " ");
+    return `<div class="lrow"><span class="dot ${a.ok ? "" : "off"}"></span><div>${esc(t)}</div><div class="r">#${fmt(a.index)}</div></div>`;
+  }).join("");
+  $("live").innerHTML = `
+    <h4>Ledger servers</h4>
+    ${nodes.map(([n, s]) => `<div class="lrow"><span class="dot ${s ? "" : "off"}"></span><div>${n}</div>
+      <div class="r">${!s ? "<b style='color:var(--red)'>down</b>" : s.role === "leader" && leader ? "<b style='color:var(--green-2)'>leader</b>" : s.role}<small>${s ? fmt(s.commit_index) + " records" : ""}</small></div></div>`).join("")}
+    <h4>Farms</h4>
+    ${farms.map(([n, f]) => { const on = f.sync && f.sync.online, w = f.wallet || {};
+      return `<div class="lrow"><span class="dot ${on ? "" : "off"}"></span><div>${n}<small>${!f.sync ? "unreachable" : on ? (f.sync.pending_events ? f.sync.pending_events + " updates waiting" : "up to date") : f.sync.pending_events + " updates waiting"}</small></div>
+        <div class="r"><b>${fmt(w.available)} L</b><small>available</small></div></div>`; }).join("")}
+    <h4>Latest records</h4>${lastRecords || '<div class="sub">No records yet.</div>'}`;
+}
+
+async function loadCapabilities() {
+  try {
+    const c = await (await fetch("/api/demo/capabilities")).json();
+    canControl = !!c.containers;
+  } catch (e) {}
+  renderList(); renderDetail();
+}
+
+async function loadResults() {
+  let r;
+  try { r = await (await fetch("/api/results")).json(); } catch (e) { return; }
+  const rec = r.recorded || {}, ut = rec.unit_tests, pt = rec.partition_test, ch = rec.chaos_test;
+  const bench = r.benchmark || [], fo = r.failover || [];
+  const best = bench.filter(b => b.experiment === "load").reduce((m, b) => Math.max(m, +b.throughput), 0);
+  const load = bench.filter(b => b.experiment === "load");
+  const errors = load.reduce((s, b) => s + +b.errors, 0), ops = load.reduce((s, b) => s + +b.operations, 0);
+  const meanFo = fo.length ? (fo.reduce((s, f) => s + +f.failover_s, 0) / fo.length).toFixed(2) : null;
+  const tiles = [];
+  if (ut) tiles.push(["Unit tests", `${ut.passed}<small>passed</small>`, `${ut.failed} failed · ${ut.covers}`]);
+  if (pt) tiles.push([`Partition test<span class="pass">${pt.result}</span>`, `1<small>leader isolated</small>`, pt.details]);
+  if (ch) tiles.push([`Chaos test<span class="pass">${ch.result}</span>`, `${ch.operations.toLocaleString()}<small>operations</small>`,
+    `${ch.node_stops} crashes (${ch.majority_losses} majority losses) in ${ch.seconds} s · ${ch.unknown_outcomes} lost · ${ch.details}`]);
+  if (bench.length) tiles.push(["Benchmark", `${best}<small>ops/s</small>`, `${errors} errors in ${ops.toLocaleString()} operations${meanFo ? ` · failover ${meanFo} s on average` : ""}`]);
+  $("resTiles").innerHTML = tiles.map(([l, b, n]) => `<div class="tile"><div class="label">${l}</div><div class="big">${b}</div><div class="note">${esc(n)}</div></div>`).join("");
+  const caps = {"throughput.png": "Throughput by number of clients", "latency.png": "Response time by number of clients",
+                "gateway_layer.png": "Cost of the gateway layer", "failover.png": "Leader failover time"};
+  $("resCharts").innerHTML = (r.files || []).map(f => `<figure><img src="/results/${f}" alt="${caps[f] || f}" onclick="zoomImg(this.src)"><figcaption>${caps[f] || f}</figcaption></figure>`).join("");
+}
+function zoomImg(src) { $("zoomImg").src = src; $("zoom").style.display = "grid"; }
+
+loadCapabilities(); loadResults();
+
+refresh(); setInterval(refresh, 2000);
+</script>
+</body>
+</html>

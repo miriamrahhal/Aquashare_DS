@@ -1,0 +1,11 @@
+{
+  "unit_tests": {"command": "python -m pytest -q", "passed": 67, "failed": 0,
+                 "covers": "Raft election and replication, network partition, state machine, wallets, sync, gateway, invariants, Merkle proofs"},
+  "partition_test": {"command": "python scripts/partition_test.py", "result": "PASS",
+                     "isolated_leader": "ledger-1 (term 28)", "new_leader": "ledger-2 (term 29)",
+                     "details": "The isolated leader could not commit entry 873; after the network healed it became a follower, its uncommitted entry was discarded, and all nodes ended at commit 874 with the same hash."},
+  "chaos_test": {"command": "python scripts/chaos_test.py --minutes 3", "result": "PASS", "seconds": 184,
+                 "operations": 1317, "node_stops": 17, "majority_losses": 5, "transfers_committed": 341,
+                 "transfers_rejected": 473, "unknown_outcomes": 0, "median_ms": 65, "log_entries": 2216,
+                 "details": "No operation lost or applied twice; all seven invariants held on all three databases."}
+}
