@@ -17,6 +17,7 @@ from ledger_node.proto import raft_pb2_grpc
 from ledger_node.raft import CommitTimeout, NotLeader, RaftNode
 from ledger_node.storage import MemoryStorage
 from ledger_node.state_machine import StateMachine
+from ledger_node import metrics
 
 NODE_ID = os.getenv("NODE_ID", "ledger-1")
 GRPC_PORT = int(os.getenv("GRPC_PORT", "50051"))
@@ -85,6 +86,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=f"AquaShare ledger node {NODE_ID}", lifespan=lifespan)
+metrics.install(app, node, NODE_ID)
 
 
 class Command(BaseModel):
@@ -111,9 +113,13 @@ def read_log(start: int = 1, limit: int = 50) -> list[dict]:
 def submit(body: Command) -> dict:
     """Commit a command. A follower forwards it to the current leader."""
     try:
+        started = time.perf_counter()
         index, result = node.submit(body.command)
+        metrics.COMMIT_SECONDS.observe(time.perf_counter() - started)
+        metrics.COMMANDS.labels("committed" if result and result.get("ok") else "rejected").inc()
         return {"committed_index": index, "leader_id": NODE_ID, "result": result}
     except NotLeader as exc:
+        metrics.COMMANDS.labels("forwarded").inc()
         leader = exc.leader_id
         if not leader or leader not in HTTP_PEERS:
             raise HTTPException(503, "no leader is currently known; try again shortly")
@@ -125,6 +131,7 @@ def submit(body: Command) -> dict:
             raise HTTPException(reply.status_code, reply.json().get("detail", "leader refused the command"))
         return {**reply.json(), "forwarded_by": NODE_ID}
     except CommitTimeout:
+        metrics.COMMANDS.labels("no_majority").inc()
         raise HTTPException(503, "command not committed: no majority of ledger nodes is reachable")
 
 @app.get("/state")

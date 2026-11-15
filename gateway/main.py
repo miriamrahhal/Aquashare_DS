@@ -13,6 +13,8 @@ import uuid
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi import Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel, Field
 
 GATEWAY_ID = os.getenv("GATEWAY_ID", "gateway-1")
@@ -24,6 +26,12 @@ RETRY_SECONDS = float(os.getenv("RETRY_SECONDS", "10"))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger(GATEWAY_ID)
+
+
+REQUEST_SECONDS = Histogram("aquashare_gateway_request_seconds", "Time to answer a client request",
+                            ["method", "path", "status"],
+                            buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20))
+RETRIES = Counter("aquashare_gateway_retries_total", "Extra attempts needed to reach the ledger leader")
 
 
 class LedgerUnavailable(Exception):
@@ -115,12 +123,28 @@ class Transfer(BaseModel):
 def create_app(ledger: LedgerClient) -> FastAPI:
     app = FastAPI(title=f"AquaShare {GATEWAY_ID}")
 
+    @app.get("/metrics", include_in_schema=False)
+    def metrics_endpoint():
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+    @app.middleware("http")
+    async def measure(request, call_next):
+        started = time.perf_counter()
+        response = await call_next(request)
+        route = request.scope.get("route")
+        path = getattr(route, "path", None)
+        if path and path != "/metrics":                         # API routes only
+            REQUEST_SECONDS.labels(request.method, path, str(response.status_code)).observe(
+                time.perf_counter() - started)
+        return response
+
 
     def run(command: dict) -> dict:
         try:
             body = ledger.submit({k: v for k, v in command.items() if v is not None})
         except LedgerUnavailable as exc:
             raise HTTPException(503, str(exc))
+        RETRIES.inc(body["attempts"] - 1)
         if not body["result"].get("ok"):
             raise HTTPException(409, {"error": body["result"].get("error"), "committed_index": body["committed_index"]})
         return body

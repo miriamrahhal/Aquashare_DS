@@ -1,0 +1,12 @@
+# Prometheus scrapes every ledger node and gateway every 2 seconds.
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+scrape_configs:
+  - job_name: ledger
+    static_configs:
+      - targets: ["ledger-1:8000", "ledger-2:8000", "ledger-3:8000"]
+  - job_name: gateway
+    static_configs:
+      - targets: ["gateway-1:8000", "gateway-2:8000"]
