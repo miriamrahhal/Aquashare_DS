@@ -3,6 +3,7 @@ x-farm: &farm
     context: .
     dockerfile: farm_node/Dockerfile
   restart: unless-stopped
+
 x-ledger-db: &ledger-db
   image: postgres:16-alpine
   environment:
@@ -15,6 +16,12 @@ x-ledger-db: &ledger-db
     timeout: 3s
     retries: 10
   restart: unless-stopped
+
+x-ledger: &ledger
+  build:
+    context: .
+    dockerfile: ledger_node/Dockerfile
+  restart: "no"
 
 services:
   ledger-db-1:
@@ -85,6 +92,33 @@ services:
     environment: { FARM_ID: farm-d, INITIAL_QUOTA_L: "20000" }
     ports: [ "8804:8000" ]
     volumes: [ "farm-d-data:/data" ]
+
+  ledger-1:
+    <<: *ledger
+    container_name: aq-ledger-1
+    environment:
+      NODE_ID: ledger-1
+      PEERS: ledger-2=ledger-2:50051,ledger-3=ledger-3:50051
+      HTTP_PEERS: ledger-2=http://ledger-2:8000,ledger-3=http://ledger-3:8000
+    ports: [ "8701:8000" ]
+
+  ledger-2:
+    <<: *ledger
+    container_name: aq-ledger-2
+    environment:
+      NODE_ID: ledger-2
+      PEERS: ledger-1=ledger-1:50051,ledger-3=ledger-3:50051
+      HTTP_PEERS: ledger-1=http://ledger-1:8000,ledger-3=http://ledger-3:8000
+    ports: [ "8702:8000" ]
+
+  ledger-3:
+    <<: *ledger
+    container_name: aq-ledger-3
+    environment:
+      NODE_ID: ledger-3
+      PEERS: ledger-1=ledger-1:50051,ledger-2=ledger-2:50051
+      HTTP_PEERS: ledger-1=http://ledger-1:8000,ledger-2=http://ledger-2:8000
+    ports: [ "8703:8000" ]
 
 volumes:
   ledger-db-1:
