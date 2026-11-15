@@ -100,7 +100,11 @@ services:
       NODE_ID: ledger-1
       PEERS: ledger-2=ledger-2:50051,ledger-3=ledger-3:50051
       HTTP_PEERS: ledger-2=http://ledger-2:8000,ledger-3=http://ledger-3:8000
-    ports: [ "8701:8000" ]
+      DATABASE_URL: postgresql://aquashare:aquashare_dev@ledger-db-1:5432/ledger
+    depends_on:
+      ledger-db-1:
+        condition: service_healthy
+    ports: ["8701:8000"]
 
   ledger-2:
     <<: *ledger
@@ -109,6 +113,10 @@ services:
       NODE_ID: ledger-2
       PEERS: ledger-1=ledger-1:50051,ledger-3=ledger-3:50051
       HTTP_PEERS: ledger-1=http://ledger-1:8000,ledger-3=http://ledger-3:8000
+      DATABASE_URL: postgresql://aquashare:aquashare_dev@ledger-db-2:5432/ledger
+    depends_on:
+      ledger-db-2:
+        condition: service_healthy
     ports: [ "8702:8000" ]
 
   ledger-3:
@@ -118,6 +126,10 @@ services:
       NODE_ID: ledger-3
       PEERS: ledger-1=ledger-1:50051,ledger-2=ledger-2:50051
       HTTP_PEERS: ledger-1=http://ledger-1:8000,ledger-2=http://ledger-2:8000
+      DATABASE_URL: postgresql://aquashare:aquashare_dev@ledger-db-3:5432/ledger
+    depends_on:
+      ledger-db-3:
+        condition: service_healthy
     ports: [ "8703:8000" ]
 
 volumes:

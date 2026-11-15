@@ -2,11 +2,14 @@
 import json
 import logging
 import os
+import time
 from concurrent import futures
 from contextlib import asynccontextmanager
 
 import grpc
 import httpx
+import psycopg
+from ledger_node.storage import MemoryStorage, PostgresStorage
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -36,7 +39,24 @@ def apply(entry):
     return {"index": entry.index}
 
 
-node = RaftNode(NODE_ID, PEERS, MemoryStorage(), apply_fn=apply)
+def open_storage():
+    """Use the node's own PostgreSQL database when DATABASE_URL is set; otherwise keep the log in memory."""
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        return MemoryStorage()
+    for attempt in range(1, 31):
+        try:
+            storage = PostgresStorage(dsn)
+            log.info("loaded from PostgreSQL: term %d, %d log entries, last hash %s",
+                     storage.term, storage.last_index(), storage.last_hash()[:16])
+            return storage
+        except psycopg.OperationalError:
+            log.warning("database not ready (attempt %d), retrying in 1 s", attempt)
+            time.sleep(1)
+    raise RuntimeError("could not connect to the ledger database")
+
+
+node = RaftNode(NODE_ID, PEERS, open_storage(), apply_fn=apply)
 grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=16))
 raft_pb2_grpc.add_RaftServicer_to_server(node, grpc_server)
 grpc_server.add_insecure_port(f"[::]:{GRPC_PORT}")
