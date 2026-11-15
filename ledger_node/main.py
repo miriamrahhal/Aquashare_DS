@@ -133,3 +133,11 @@ def read_state(day: str | None = None) -> dict:
     if state is None:
         raise HTTPException(404, "this node has no database")
     return {"node_id": NODE_ID, "last_applied": node.status()["last_applied"], **state.snapshot(day)}
+
+
+@app.get("/transfers")
+def read_transfers(farm: str, day: str | None = None) -> list[dict]:
+    """Committed transfers sent or received by a farm, as stored on this node."""
+    if state is None:
+        raise HTTPException(404, "this node has no database")
+    return state.transfers(farm, day)

@@ -19,6 +19,8 @@ class FakeLedger:
         self.lose_next_answer = False                     # commit, but the reply never reaches the farm
 
     def handler(self, request: httpx.Request):
+        if request.method == "GET" and request.url.path.endswith("/transfers"):
+            return httpx.Response(200, json=[])                # no transfers in these tests
         if request.method == "GET":
             return httpx.Response(200, json={"day": DAY, "allocated": self.allocation,
                                              "consumed": sum(self.events.values())})

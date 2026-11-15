@@ -164,6 +164,16 @@ class StateMachine:
             raise Rejected(f"no allocation for farm {farm_id} on {day} (unknown farm or day not opened)")
         return dict(zip(("allocated", "received", "sent", "consumed"), row))
 
+    def transfers(self, farm_id: str, day: str | None = None) -> list[dict]:
+        """Committed transfers sent or received by a farm (all days, or one day)."""
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT transfer_id::text, day::text, sender, recipient, amount_l, status, log_index FROM transfers "
+                "WHERE (sender = %s OR recipient = %s) AND (%s::date IS NULL OR day = %s::date) ORDER BY log_index",
+                (farm_id, farm_id, day, day)).fetchall()
+        keys = ("transfer_id", "day", "sender", "recipient", "amount_l", "status", "log_index")
+        return [dict(zip(keys, r)) for r in rows]
+
     def snapshot(self, day: str | None = None) -> dict:
         """Current state as seen by this node (used by the API and to compare nodes)."""
         with self.lock:

@@ -22,6 +22,7 @@ LEDGER_NODES = dict(item.split("=", 1) for item in os.getenv(
 RETRY_SECONDS = float(os.getenv("RETRY_SECONDS", "10"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger(GATEWAY_ID)
 
 
@@ -114,6 +115,7 @@ class Transfer(BaseModel):
 def create_app(ledger: LedgerClient) -> FastAPI:
     app = FastAPI(title=f"AquaShare {GATEWAY_ID}")
 
+
     def run(command: dict) -> dict:
         try:
             body = ledger.submit({k: v for k, v in command.items() if v is not None})
@@ -170,6 +172,11 @@ def create_app(ledger: LedgerClient) -> FastAPI:
             if f["farm_id"] == farm_id:
                 return {"gateway": GATEWAY_ID, "day": st["day"], **f}
         raise HTTPException(404, f"no balance for {farm_id} on {st.get('day')}")
+
+    @app.get("/farms/{farm_id}/transfers")
+    def farm_transfers(farm_id: str, day: str | None = None):
+        params = {"farm": farm_id, **({"day": day} if day else {})}
+        return read("/transfers", params)
 
     return app
 

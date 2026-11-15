@@ -52,6 +52,8 @@ class Wallet:
         self._seq = 0
         self._ledger_days: set[str] = set()   # days whose allocation came from the ledger
         self._synced_upto = 0                 # every event up to this seq is known to the ledger
+        self._outgoing: dict[str, dict] = {}  # open reservations: transfer_id -> {day, recipient, amount}
+        self._credited: set[str] = set()      # incoming transfers already added to the wallet
         for event in journal.read_all():
             self._apply(event)
 
@@ -74,13 +76,18 @@ class Wallet:
             day.consumed += amount
         elif kind == "reserve":
             day.reserved[event["transfer_id"]] = amount
+            self._outgoing[event["transfer_id"]] = {"day": event["day"], "amount": amount,
+                                                    "recipient": event.get("recipient")}
         elif kind == "release":
             day.reserved.pop(event["transfer_id"], None)
+            self._outgoing.pop(event["transfer_id"], None)
         elif kind == "transfer_sent":
             day.reserved.pop(event["transfer_id"], None)
+            self._outgoing.pop(event["transfer_id"], None)
             day.sent += amount
         elif kind == "transfer_received":
             day.received += amount
+            self._credited.add(event["transfer_id"])
 
     def _record(self, kind: str, day: str, amount: int = 0, **extra) -> dict:
         """Journal an event, then apply it. Must be called with the lock held."""
@@ -113,7 +120,7 @@ class Wallet:
                 raise InsufficientWater(f"{amount} L requested, {self._day(day).available} L available")
             return self._record("consume", day, amount)
 
-    def reserve(self, day: str, transfer_id: str, amount: int) -> dict:
+    def reserve(self, day: str, transfer_id: str, amount: int, recipient: str | None = None) -> dict:
         if amount <= 0:
             raise ValueError("amount must be positive")
         with self._lock:
@@ -122,7 +129,7 @@ class Wallet:
                 return {"transfer_id": transfer_id, "already_reserved": True}
             if amount > balance.available:
                 raise InsufficientWater(f"{amount} L requested, {balance.available} L available")
-            return self._record("reserve", day, amount, transfer_id=transfer_id)
+            return self._record("reserve", day, amount, transfer_id=transfer_id, recipient=recipient)
 
     def release(self, day: str, transfer_id: str) -> dict:
         with self._lock:
@@ -137,9 +144,17 @@ class Wallet:
                 raise UnknownReservation(transfer_id)
             return self._record("transfer_sent", day, amount, transfer_id=transfer_id)
 
-    def credit(self, day: str, transfer_id: str, amount: int) -> dict:
+    def credit(self, day: str, transfer_id: str, amount: int) -> dict | None:
+        """Add water received from another farm. A transfer is credited only once."""
         with self._lock:
+            if transfer_id in self._credited:
+                return None
             return self._record("transfer_received", day, amount, transfer_id=transfer_id)
+
+    def open_reservations(self) -> dict[str, dict]:
+        """Outgoing transfers reserved locally whose outcome on the ledger is not known yet."""
+        with self._lock:
+            return {tid: dict(info) for tid, info in self._outgoing.items()}
 
     # ------------------------------------------------------------ synchronisation with the ledger
     def set_ledger_allocation(self, day: str, amount: int) -> dict | None:
@@ -178,7 +193,7 @@ class Wallet:
         """The ledger has committed every consumption event up to upto_seq."""
         with self._lock:
             return self._record("sync_ack", day, upto_seq=upto_seq)
-        
+
     def balance(self, day: str) -> dict:
         with self._lock:
             return {"farm_id": self.farm_id, "day": day, **self._day(day).as_dict()}

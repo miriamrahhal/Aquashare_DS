@@ -2,7 +2,9 @@
 
 Every few seconds the farm:
   1. asks the ledger for the current day and its allocation, and records it in the wallet;
-  2. sends the consumption events the ledger has not confirmed yet, oldest first.
+  2. sends the consumption events the ledger has not confirmed yet, oldest first;
+  3. settles its outgoing transfers whose outcome is not known yet;
+  4. adds to its wallet the transfers other farms sent to it.
 
 If the gateway cannot be reached, the farm is offline. Irrigation does not stop: the wallet
 still holds the water the ledger granted, and every litre used is written to the journal.
@@ -15,6 +17,8 @@ import time
 import uuid
 
 import httpx
+
+from farm_node.wallet import UnknownReservation
 
 log = logging.getLogger("sync")
 
@@ -29,6 +33,7 @@ class LedgerSync:
         self.last_sync = None
         self.last_error = None
         self.ledger_balance = None
+        self.transfer_lock = threading.Lock()   # one submission at a time per transfer
 
     def _get(self, path):
         if not self.link_up:
@@ -60,6 +65,10 @@ class LedgerSync:
                     raise RuntimeError(f"ledger answered {reply.status_code}: {reply.text[:200]}")
                 self.wallet.mark_synced(day, batch[-1]["seq"])
                 sent += len(batch)
+            for transfer_id in self.wallet.open_reservations():
+                if self.submit_transfer(transfer_id)["status"] == "pending":
+                    raise RuntimeError("ledger did not settle a transfer")
+            self._credit_incoming()
             reply = self._get(f"/farms/{self.farm_id}/balance")
             self.ledger_balance = reply.json() if reply.status_code == 200 else None
             if not self.online:
@@ -72,6 +81,51 @@ class LedgerSync:
                 log.warning("offline: %s (%d events waiting)", exc, self.wallet.pending_count())
             self.online, self.last_error = False, str(exc)
         return {"online": self.online, "sent": sent, "pending": self.wallet.pending_count()}
+
+    # ------------------------------------------------------------ transfers
+    def submit_transfer(self, transfer_id: str) -> dict:
+        """Step 2 of a transfer: ask the ledger to commit a transfer already reserved in the wallet.
+
+        committed -> the reservation becomes a confirmed send (step 3)
+        rejected  -> the ledger refused it, so the reserved water is released
+        pending   -> the outcome is unknown (no answer); the water stays reserved and the
+                     same transfer is sent again later. It is never released on a guess,
+                     because the ledger may have committed it.
+        """
+        with self.transfer_lock:
+            info = self.wallet.open_reservations().get(transfer_id)
+            if info is None:
+                return {"status": "settled"}
+            body = {"transfer_id": transfer_id, "day": info["day"], "sender": self.farm_id,
+                    "recipient": info["recipient"], "amount_l": info["amount"],
+                    "cmd_id": f"transfer-{transfer_id}"}          # the same cmd_id on every attempt
+            try:
+                reply = self._post("/transfers", body)
+            except httpx.HTTPError as exc:
+                return {"status": "pending", "reason": str(exc)}
+            try:
+                if reply.status_code == 200:
+                    self.wallet.confirm_sent(info["day"], transfer_id)
+                    log.info("transfer %s: %d L to %s committed", transfer_id[:8], info["amount"], info["recipient"])
+                    return {"status": "committed", "committed_index": reply.json()["committed_index"]}
+                if reply.status_code == 409:
+                    reason = reply.json().get("detail", {}).get("error")
+                    self.wallet.release(info["day"], transfer_id)
+                    log.warning("transfer %s rejected by the ledger (%s): reservation released", transfer_id[:8], reason)
+                    return {"status": "rejected", "reason": reason}
+            except UnknownReservation:
+                return {"status": "settled"}
+            return {"status": "pending", "reason": f"ledger answered {reply.status_code}"}
+
+    def _credit_incoming(self):
+        """Add to the wallet every committed transfer sent to this farm that is not credited yet."""
+        reply = self._get(f"/farms/{self.farm_id}/transfers")
+        if reply.status_code != 200:
+            return
+        for t in reply.json():
+            if t["recipient"] == self.farm_id and t["status"] == "committed":
+                if self.wallet.credit(t["day"], t["transfer_id"], t["amount_l"]):
+                    log.info("received %d L from %s (transfer %s)", t["amount_l"], t["sender"], t["transfer_id"][:8])
 
     def run_forever(self):
         while True:

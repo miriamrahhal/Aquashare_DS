@@ -9,6 +9,7 @@ import os
 import random
 import threading
 import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -28,6 +29,7 @@ FLOW_L_PER_TICK = int(os.getenv("FLOW_L_PER_TICK", "20"))
 MOISTURE_ON, MOISTURE_OFF = 35.0, 60.0   # start irrigating below 35%, stop above 60%
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)     # keep the farm's own messages readable
 log = logging.getLogger(FARM_ID)
 
 wallet = Wallet(FARM_ID, Journal(DATA_DIR / "journal.jsonl"))
@@ -73,6 +75,10 @@ class Amount(BaseModel):
     amount: int
 
 
+class TransferRequest(BaseModel):
+    recipient: str
+    amount_l: int
+
 def current_day() -> str:
     day = wallet.current_day()
     if day is None:
@@ -113,6 +119,25 @@ def set_irrigation(state: str) -> dict:
     sensors["irrigation_enabled"] = state == "on"
     return {"irrigation_enabled": sensors["irrigation_enabled"]}
 
+@app.post("/transfers")
+def send_transfer(body: TransferRequest) -> dict:
+    """Send water to another farm: reserve locally, commit on the ledger, then confirm locally."""
+    day = current_day()
+    transfer_id = str(uuid.uuid4())
+    try:
+        wallet.reserve(day, transfer_id, body.amount_l, recipient=body.recipient)   # step 1: reserve
+    except InsufficientWater as exc:
+        raise HTTPException(409, str(exc))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    outcome = sync.submit_transfer(transfer_id)                                    # steps 2 and 3
+    return {"transfer_id": transfer_id, **outcome, "wallet": wallet.balance(day)}
+
+
+@app.get("/transfers/open")
+def open_transfers() -> dict:
+    """Transfers reserved locally whose outcome on the ledger is not known yet."""
+    return wallet.open_reservations()
 
 @app.get("/sync")
 def sync_status() -> dict:
@@ -132,3 +157,6 @@ def set_link(state: str) -> dict:
 @app.get("/journal")
 def journal(limit: int = 20) -> list[dict]:
     return wallet.events(limit)
+
+
+
