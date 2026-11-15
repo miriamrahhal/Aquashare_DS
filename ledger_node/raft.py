@@ -89,6 +89,7 @@ class RaftNode(raft_pb2_grpc.RaftServicer):
                 "voted_for": self.voted_for, "commit_index": self.commit_index,
                 "last_applied": self.last_applied, "last_log_index": self.storage.last_index(),
                 "last_log_term": self.storage.last_term(),
+                "last_log_hash": self.storage.last_hash()[:16],
             }
 
     # ------------------------------------------------------------------ lifecycle
