@@ -1,2 +1,61 @@
+x-ledger-db: &ledger-db
+  image: postgres:16-alpine
+  environment:
+    POSTGRES_DB: ledger
+    POSTGRES_USER: aquashare
+    POSTGRES_PASSWORD: aquashare_dev
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U aquashare -d ledger"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+  restart: unless-stopped
+
 services:
-  
+  ledger-db-1:
+    <<: *ledger-db
+    container_name: aq-ledger-db-1
+    ports:
+      - "5441:5432"
+    volumes:
+      - ledger-db-1:/var/lib/postgresql/data
+      - ./ledger_node/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+
+  ledger-db-2:
+    <<: *ledger-db
+    container_name: aq-ledger-db-2
+    ports:
+      - "5442:5432"
+    volumes:
+      - ledger-db-2:/var/lib/postgresql/data
+      - ./ledger_node/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+
+  ledger-db-3:
+    <<: *ledger-db
+    container_name: aq-ledger-db-3
+    ports:
+      - "5443:5432"
+    volumes:
+      - ledger-db-3:/var/lib/postgresql/data
+      - ./ledger_node/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: aq-rabbitmq
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  ledger-db-1:
+  ledger-db-2:
+  ledger-db-3:
+  rabbitmq-data:
