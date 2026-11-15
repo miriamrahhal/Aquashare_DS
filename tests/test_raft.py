@@ -1,0 +1,119 @@
+"""Raft tests: three real nodes talking over gRPC on this machine."""
+import socket
+import time
+from concurrent import futures
+
+import grpc
+import pytest
+
+from ledger_node.proto import raft_pb2_grpc
+from ledger_node.raft import LEADER, CommitTimeout, NotLeader, RaftNode
+from ledger_node.storage import MemoryStorage
+
+
+def free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+class Cluster:
+    def __init__(self, size=3):
+        ids = [f"ledger-{i}" for i in range(1, size + 1)]
+        self.addresses = {i: f"127.0.0.1:{free_port()}" for i in ids}
+        self.nodes, self.servers = {}, {}
+        for node_id in ids:
+            self.start(node_id, MemoryStorage())
+
+    def start(self, node_id, storage):
+        peers = {p: a for p, a in self.addresses.items() if p != node_id}
+        node = RaftNode(node_id, peers, storage, election_timeout=(0.3, 0.6), heartbeat_interval=0.05,
+                        rpc_timeout=0.2)
+        server = grpc.server(futures.ThreadPoolExecutor(max_workers=8))
+        raft_pb2_grpc.add_RaftServicer_to_server(node, server)
+        server.add_insecure_port(self.addresses[node_id])
+        server.start()
+        node.start()
+        self.nodes[node_id], self.servers[node_id] = node, server
+
+    def crash(self, node_id):
+        self.nodes[node_id].stop()
+        self.servers[node_id].stop(0)
+        return self.nodes.pop(node_id).storage
+
+    def leader(self, timeout=5.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            leaders = [n for n in self.nodes.values() if n.role == LEADER]
+            # wait until every running node also knows who the leader is
+            if len(leaders) == 1 and all(n.leader_id == leaders[0].id for n in self.nodes.values()):
+                return leaders[0]
+            time.sleep(0.05)
+        raise AssertionError("no single leader elected")
+
+    def shutdown(self):
+        for node_id in list(self.nodes):
+            self.crash(node_id)
+
+
+@pytest.fixture
+def cluster():
+    c = Cluster()
+    yield c
+    c.shutdown()
+
+
+def test_one_leader_is_elected(cluster):
+    leader = cluster.leader()
+    time.sleep(0.5)
+    terms = {n.term for n in cluster.nodes.values()}
+    assert len(terms) == 1
+    assert all(n.leader_id == leader.id for n in cluster.nodes.values())
+
+
+def test_followers_reject_commands(cluster):
+    leader = cluster.leader()
+    follower = next(n for n in cluster.nodes.values() if n is not leader)
+    with pytest.raises(NotLeader) as error:
+        follower.submit({"type": "test"})
+    assert error.value.leader_id == leader.id
+
+
+def test_command_is_replicated_to_all_nodes(cluster):
+    leader = cluster.leader()
+    index, _ = leader.submit({"type": "test", "value": 1})
+    time.sleep(0.3)
+    for node in cluster.nodes.values():
+        assert node.storage.entry(index).command == '{"type": "test", "value": 1}'
+        assert node.commit_index >= index
+
+
+def test_new_leader_after_leader_crash_keeps_committed_entries(cluster):
+    old = cluster.leader()
+    index, _ = old.submit({"type": "test", "value": "before crash"})
+    cluster.crash(old.id)
+    new = cluster.leader()
+    assert new.id != old.id and new.term > old.term
+    assert "before crash" in new.storage.entry(index).command
+    new.submit({"type": "test", "value": "after crash"})
+
+
+def test_no_commit_without_majority(cluster):
+    leader = cluster.leader()
+    for node_id in [n for n in list(cluster.nodes) if n != leader.id]:
+        cluster.crash(node_id)
+    with pytest.raises(CommitTimeout):
+        leader.submit({"type": "test"}, timeout=1.0)
+
+
+def test_restarted_follower_catches_up(cluster):
+    leader = cluster.leader()
+    follower_id = next(n for n in cluster.nodes if n != leader.id)
+    storage = cluster.crash(follower_id)
+    for i in range(5):
+        leader.submit({"type": "test", "value": i})
+    cluster.start(follower_id, storage)
+    deadline = time.time() + 5
+    while time.time() < deadline and cluster.nodes[follower_id].storage.last_index() < leader.storage.last_index():
+        time.sleep(0.1)
+    assert cluster.nodes[follower_id].storage.last_index() == leader.storage.last_index()
