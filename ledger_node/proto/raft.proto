@@ -1,0 +1,47 @@
+// Messages exchanged between AquaShare ledger nodes to run the Raft consensus algorithm.
+syntax = "proto3";
+
+package aquashare.raft;
+
+service Raft {
+  // Sent by a candidate to ask another node for its vote in an election.
+  rpc RequestVote (VoteRequest) returns (VoteReply);
+  // Sent by the leader to replicate log entries; with no entries it is a heartbeat.
+  rpc AppendEntries (AppendRequest) returns (AppendReply);
+}
+
+message VoteRequest {
+  int64  term           = 1;  // candidate's term
+  string candidate_id   = 2;
+  int64  last_log_index = 3;  // index of the candidate's last log entry
+  int64  last_log_term  = 4;  // term of the candidate's last log entry
+}
+
+message VoteReply {
+  int64 term         = 1;     // receiver's current term, so the candidate can step down
+  bool  vote_granted = 2;
+}
+
+message LogEntry {
+  int64  index      = 1;
+  int64  term       = 2;
+  string command    = 3;      // JSON-encoded state machine command
+  string prev_hash  = 4;      // hash of the previous entry (hash chain)
+  string entry_hash = 5;      // hash of this entry
+}
+
+message AppendRequest {
+  int64    term           = 1;  // leader's term
+  string   leader_id      = 2;
+  int64    prev_log_index = 3;  // index of the entry just before the new ones
+  int64    prev_log_term  = 4;  // term of that entry
+  repeated LogEntry entries = 5;  // empty for a heartbeat
+  int64    leader_commit  = 6;  // leader's commit index
+}
+
+message AppendReply {
+  int64 term           = 1;   // receiver's current term
+  bool  success        = 2;
+  int64 match_index    = 3;   // last index known to match the leader's log
+  int64 conflict_index = 4;   // where the leader should retry from after a mismatch
+}
