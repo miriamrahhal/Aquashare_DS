@@ -162,4 +162,4 @@ shared/        shared code
 
 ## Author
 
-Myriam · Master of Computer & Communication Engineering, Antonine University · Distributed Systems course
+Myriam Rahal · Master of Computer & Communication Engineering, Antonine University · Distributed Systems course
