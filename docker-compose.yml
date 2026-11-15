@@ -68,6 +68,7 @@ services:
   ledger-db-1:
     <<: *ledger-db
     container_name: aq-ledger-db-1
+    networks: [ ledger-1-db ]
     ports:
       - "5441:5432"
     volumes:
@@ -77,6 +78,7 @@ services:
   ledger-db-2:
     <<: *ledger-db
     container_name: aq-ledger-db-2
+    networks: [ ledger-2-db ]
     ports:
       - "5442:5432"
     volumes:
@@ -86,6 +88,7 @@ services:
   ledger-db-3:
     <<: *ledger-db
     container_name: aq-ledger-db-3
+    networks: [ ledger-3-db ]
     ports:
       - "5443:5432"
     volumes:
@@ -140,6 +143,7 @@ services:
   ledger-1:
     <<: *ledger
     container_name: aq-ledger-1
+    networks: [ default, ledger-1-db ]
     environment:
       NODE_ID: ledger-1
       PEERS: ledger-2=ledger-2:50051,ledger-3=ledger-3:50051
@@ -153,6 +157,7 @@ services:
   ledger-2:
     <<: *ledger
     container_name: aq-ledger-2
+    networks: [ default, ledger-2-db ]
     environment:
       NODE_ID: ledger-2
       PEERS: ledger-1=ledger-1:50051,ledger-3=ledger-3:50051
@@ -166,6 +171,7 @@ services:
   ledger-3:
     <<: *ledger
     container_name: aq-ledger-3
+    networks: [ default, ledger-3-db ]
     environment:
       NODE_ID: ledger-3
       PEERS: ledger-1=ledger-1:50051,ledger-2=ledger-2:50051
@@ -204,3 +210,11 @@ volumes:
   farm-d-data:
   relay-data:
   analytics-data:
+
+# Each ledger node reaches its own database over a private network, so cutting a node
+# off the cluster network (a partition) does not also cut it off from its database.
+networks:
+  default:
+  ledger-1-db:
+  ledger-2-db:
+  ledger-3-db:
