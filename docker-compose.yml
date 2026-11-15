@@ -1,3 +1,8 @@
+x-farm: &farm
+  build:
+    context: .
+    dockerfile: farm_node/Dockerfile
+  restart: unless-stopped
 x-ledger-db: &ledger-db
   image: postgres:16-alpine
   environment:
@@ -53,9 +58,40 @@ services:
       timeout: 10s
       retries: 12
     restart: unless-stopped
+  farm-a:
+    <<: *farm
+    container_name: aq-farm-a
+    environment: { FARM_ID: farm-a, INITIAL_QUOTA_L: "20000" }
+    ports: [ "8801:8000" ]
+    volumes: [ "farm-a-data:/data" ]
+
+  farm-b:
+    <<: *farm
+    container_name: aq-farm-b
+    environment: { FARM_ID: farm-b, INITIAL_QUOTA_L: "20000" }
+    ports: [ "8802:8000" ]
+    volumes: [ "farm-b-data:/data" ]
+
+  farm-c:
+    <<: *farm
+    container_name: aq-farm-c
+    environment: { FARM_ID: farm-c, INITIAL_QUOTA_L: "20000" }
+    ports: [ "8803:8000" ]
+    volumes: [ "farm-c-data:/data" ]
+
+  farm-d:
+    <<: *farm
+    container_name: aq-farm-d
+    environment: { FARM_ID: farm-d, INITIAL_QUOTA_L: "20000" }
+    ports: [ "8804:8000" ]
+    volumes: [ "farm-d-data:/data" ]
 
 volumes:
   ledger-db-1:
   ledger-db-2:
   ledger-db-3:
   rabbitmq-data:
+  farm-a-data:
+  farm-b-data:
+  farm-c-data:
+  farm-d-data:
