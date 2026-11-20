@@ -95,3 +95,9 @@ def test_raft_messages_use_mutual_tls(certs, monkeypatch):
             plain.RequestVote(raft_pb2.VoteRequest(term=3, candidate_id="intruder"), timeout=3)
     finally:
         server.stop(0)
+
+
+def test_transport_none_still_uses_tls(https_server, certs, monkeypatch):
+    use(monkeypatch, certs / "certs", "client")              # the gateway and farms pass transport=None
+    with tls.Client(timeout=5, transport=None) as c:
+        assert c.get(https_server).text == "hello"

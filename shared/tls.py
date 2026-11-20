@@ -64,6 +64,8 @@ class Client(httpx.Client):
     """An httpx.Client that uses mutual TLS when it is on (and is a plain client otherwise)."""
 
     def __init__(self, **kwargs):
+        if kwargs.get("transport") is None:                # transport=None means "a normal connection"
+            kwargs.pop("transport", None)
         if ENABLED and "transport" not in kwargs:
             kwargs = {**httpx_kwargs(), **kwargs}
         super().__init__(**kwargs)

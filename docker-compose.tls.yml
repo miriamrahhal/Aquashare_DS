@@ -83,7 +83,7 @@ services:
       TLS_KEY: /certs/farm-a.key
       UVICORN_SSL_CERTFILE: /certs/farm-a.crt
       UVICORN_SSL_KEYFILE: /certs/farm-a.key
-      GATEWAY_URL: https://gateway-lb
+      GATEWAY_URL: https://gateway-lb:80
     volumes: [ "farm-a-data:/data", "./certs:/certs:ro" ]
   farm-b:
     environment:
@@ -92,7 +92,7 @@ services:
       TLS_KEY: /certs/farm-b.key
       UVICORN_SSL_CERTFILE: /certs/farm-b.crt
       UVICORN_SSL_KEYFILE: /certs/farm-b.key
-      GATEWAY_URL: https://gateway-lb
+      GATEWAY_URL: https://gateway-lb:80
     volumes: [ "farm-b-data:/data", "./certs:/certs:ro" ]
   farm-c:
     environment:
@@ -101,7 +101,7 @@ services:
       TLS_KEY: /certs/farm-c.key
       UVICORN_SSL_CERTFILE: /certs/farm-c.crt
       UVICORN_SSL_KEYFILE: /certs/farm-c.key
-      GATEWAY_URL: https://gateway-lb
+      GATEWAY_URL: https://gateway-lb:80
     volumes: [ "farm-c-data:/data", "./certs:/certs:ro" ]
   farm-d:
     environment:
@@ -110,7 +110,7 @@ services:
       TLS_KEY: /certs/farm-d.key
       UVICORN_SSL_CERTFILE: /certs/farm-d.crt
       UVICORN_SSL_KEYFILE: /certs/farm-d.key
-      GATEWAY_URL: https://gateway-lb
+      GATEWAY_URL: https://gateway-lb:80
     volumes: [ "farm-d-data:/data", "./certs:/certs:ro" ]
 
   event-relay:
@@ -143,7 +143,7 @@ services:
       TLS_KEY: /certs/dashboard.key
       UVICORN_SSL_CERTFILE: /certs/dashboard.crt
       UVICORN_SSL_KEYFILE: /certs/dashboard.key     # browsers: HTTPS without a client certificate
-      GATEWAY_URL: https://gateway-lb
+      GATEWAY_URL: https://gateway-lb:80
       LEDGER_NODES: *ledger-urls
       FARM_NODES: farm-a=https://farm-a:8000,farm-b=https://farm-b:8000,farm-c=https://farm-c:8000,farm-d=https://farm-d:8000
       ANALYTICS_URL: https://analytics:8000
