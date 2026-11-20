@@ -110,7 +110,7 @@ Run these from the project folder, with the virtual environment active and the s
 
 | Command | What it does |
 |---|---|
-| `python -m pytest -q` | 67 unit tests (Raft, state machine, wallets, sync, transfers, gateway, analytics, invariants, Merkle proofs) |
+| `python -m pytest -q` | 82 unit tests (Raft, state machine, wallets, sync, transfers, gateway, analytics, invariants, Merkle proofs, signed reports, mutual TLS) |
 | `python scripts/check_invariants.py` | Checks the 7 correctness rules (I1–I7) on the 3 ledger databases |
 | `python scripts/partition_test.py` | Cuts the leader off the network and checks it cannot commit, then heals the network |
 | `python scripts/chaos_test.py --minutes 3` | Sends traffic while randomly stopping and starting ledger nodes, then checks nothing was lost or doubled |
@@ -124,7 +124,7 @@ PowerShell helpers in `scripts/`: `cluster_status.ps1`, `farm_status.ps1`, `comp
 
 | Measure | Result |
 |---|---|
-| Unit tests | 67 passed |
+| Unit tests | 82 passed |
 | Chaos test | 1,317 operations, 17 node crashes (5 losses of majority), 0 lost or doubled, all invariants hold |
 | Partition test | Isolated leader could not commit; it rejoined as a follower and all nodes ended with the same history |
 | Throughput | 15 ops/s with 1 client, up to 76 ops/s at saturation |
