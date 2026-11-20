@@ -18,7 +18,14 @@ import hashlib
 import json
 import sys
 
-import httpx
+import httpx  # noqa: F401  (kept for its exception classes)
+import os as _os
+import sys as _sys
+
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+from shared import tls  # noqa: E402
+
+tls.for_host()          # follow the project's .env: use mutual TLS (as the operator) when it is on
 
 NODES = {"ledger-1": "http://localhost:8701", "ledger-2": "http://localhost:8702", "ledger-3": "http://localhost:8703"}
 
@@ -58,7 +65,7 @@ def main():
     a.add_argument("--tamper", action="store_true", help="change the amount before checking (should fail)")
     args = a.parse_args()
     params = {"index": args.index} if args.index else {"transfer_id": args.transfer_id}
-    r = httpx.get(f"{NODES[args.node]}/merkle/proof", params=params, timeout=10)
+    r = tls.get(f"{NODES[args.node]}/merkle/proof", params=params, timeout=10)
     if r.status_code != 200:
         sys.exit(f"{args.node}: {r.json().get('detail')}")
     p = r.json()
@@ -86,7 +93,7 @@ def main():
         if name == p["node_id"]:
             continue
         try:
-            other = httpx.get(f"{url}/merkle/root", params={"size": size}, timeout=5).json()["root"]
+            other = tls.get(f"{url}/merkle/root", params={"size": size}, timeout=5).json()["root"]
             good = other == p["root"]
             ok &= good
             print(f"{'PASS' if good else 'FAIL'}  3. {name} publishes the same root for {size} entries {other[:16]}")

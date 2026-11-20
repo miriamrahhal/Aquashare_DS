@@ -8,7 +8,14 @@ import argparse
 import time
 import uuid
 
-import httpx
+import httpx  # noqa: F401  (kept for its exception classes)
+import os as _os
+import sys as _sys
+
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+from shared import tls  # noqa: E402
+
+tls.for_host()          # follow the project's .env: use mutual TLS (as the operator) when it is on
 
 
 def main():
@@ -19,7 +26,7 @@ def main():
     p.add_argument("--interval", type=float, default=0.25)
     a = p.parse_args()
 
-    http = httpx.Client(timeout=20)
+    http = tls.Client(timeout=20)
     day = http.get(f"{a.url}/state").json()["day"]
     before = http.get(f"{a.url}/farms/{a.farm}/balance").json()["consumed"]
     ok = failed = 0

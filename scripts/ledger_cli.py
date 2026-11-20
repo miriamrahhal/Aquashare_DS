@@ -13,12 +13,19 @@ import json
 import time
 import uuid
 
-import httpx
+import httpx  # noqa: F401  (kept for its exception classes)
+import os as _os
+import sys as _sys
+
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+from shared import tls  # noqa: E402
+
+tls.for_host()          # follow the project's .env: use mutual TLS (as the operator) when it is on
 
 
 def send(port, command, cmd_id=None):
     command["cmd_id"] = cmd_id or str(uuid.uuid4())
-    reply = httpx.post(f"http://localhost:{port}/command", json={"command": command}, timeout=10)
+    reply = tls.post(f"http://localhost:{port}/command", json={"command": command}, timeout=10)
     body = reply.json()
     if reply.status_code != 200:
         print(f"REFUSED ({reply.status_code}): {body.get('detail')}")
@@ -58,7 +65,7 @@ def main():
                       "amount_l": a.amount_l}, a.cmd_id)
     else:
         params = {"day": a.day} if a.day else {}
-        st = httpx.get(f"http://localhost:{a.port}/state", params=params, timeout=5).json()
+        st = tls.get(f"http://localhost:{a.port}/state", params=params, timeout=5).json()
         print(f"{st['node_id']}  day {st['day']}  limit {st.get('limit_l')} L  "
               f"allocated {st.get('total_allocated')} L  consumed {st.get('total_consumed')} L  (last applied entry {st['last_applied']})")
         print(f"  {'farm':8} {'allocated':>10} {'received':>9} {'sent':>6} {'consumed':>9} {'available':>10}")

@@ -295,6 +295,85 @@
   .lrow small { color: var(--muted); font-size: 12px; display: block; }
   .lrow .r { font-size: 12.5px; color: var(--muted); text-align: right; }
   .lrow .r b { color: var(--ink); font-size: 14px; }
+  /* terminal view */
+  .term { background: #0f1210; border-radius: 14px; padding: 12px 14px; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          color: #d7e4c6; max-height: 320px; overflow: auto; }
+  .term .tbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-family: inherit; color: #8a9184; font-size: 11.5px; }
+  .term .tbar button { background: none; border: 1px solid #3a4136; color: #b9c4ae; border-radius: 6px; font: inherit; padding: 2px 8px; cursor: pointer; }
+  .term .line { margin-bottom: 8px; }
+  .term .cmd { color: #a6dc7c; white-space: pre-wrap; word-break: break-all; display: flex; gap: 8px; }
+  .term .cmd span { flex: 1; } .term .cmd .cp { background: none; border: 0; color: #6c7566; cursor: pointer; font: inherit; padding: 0; }
+  .term .cmd .cp:hover { color: #fff; }
+  .term .res { color: #e7ece2; white-space: pre-wrap; word-break: break-all; opacity: .9; }
+  .term .res.err { color: #ff9a9d; } .term .comment { color: #8a9184; }
+  .term .empty { color: #6c7566; }
+  /* ================= My Farm (farmer view) */
+  .mf-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .mf-head h2 { margin: 0; }
+  .pick { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pick button { height: 40px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font: inherit;
+                 font-size: 15px; font-weight: 600; cursor: pointer; color: var(--ink); }
+  .pick button.on { background: var(--black); color: #fff; border-color: var(--black); }
+  .pill-sync { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 500; background: var(--green-pale); }
+  .pill-sync.warn { background: var(--yellow-pale); } .pill-sync.bad { background: #fde7e7; }
+  .pill-sync .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+  .pill-sync.warn .dot { background: #e0b400; } .pill-sync.bad .dot { background: var(--red); }
+  .linkbtn { background: none; border: 0; font: inherit; font-size: 14px; color: var(--green-2); cursor: pointer; text-decoration: underline; padding: 0; }
+  .mf-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; }
+  .mf-water { display: grid; grid-template-columns: 210px 1fr; gap: 24px; align-items: center; }
+  .ring { position: relative; width: 210px; height: 210px; }
+  .ring svg { width: 210px; height: 210px; transform: rotate(-90deg); }
+  .ring .rmid { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .ring .rmid b { display: block; font-size: 38px; font-weight: 600; line-height: 1; }
+  .ring .rmid span { font-size: 13px; color: var(--muted); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stats div { background: var(--tile); border-radius: 12px; padding: 10px 12px; }
+  .stats small { display: block; font-size: 12.5px; color: var(--muted); } .stats b { font-size: 20px; font-weight: 600; }
+  .note-box { margin-top: 14px; border-radius: 14px; padding: 12px 14px; font-size: 14px; background: var(--tile); line-height: 1.45; }
+  .note-box.warn { background: var(--yellow-pale); } .note-box.bad { background: #fde7e7; } .note-box.ok { background: var(--green-pale); }
+  .irr .state { display: flex; align-items: center; gap: 12px; margin: 6px 0 14px; }
+  .irr .big { font-size: 22px; font-weight: 600; }
+  .meter { height: 14px; border-radius: 999px; background: var(--tile); overflow: hidden; margin: 6px 0 4px; }
+  .meter i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #f0c64a, var(--green)); }
+  .meter-l { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .btn-big { height: 48px; width: 100%; justify-content: center; font-size: 16px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .chips button { height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font: inherit; font-size: 13.5px; cursor: pointer; }
+  .chips button:hover { background: var(--tile); }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 6px; } .hint.err { color: var(--red); font-weight: 500; }
+  .confirm { border: 2px solid var(--black); border-radius: 14px; padding: 14px; margin-top: 12px; font-size: 14.5px; line-height: 1.5; }
+  .confirm .row { display: flex; gap: 8px; margin-top: 12px; }
+  .steps3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
+  .steps3 div { border-radius: 10px; padding: 8px; font-size: 13px; text-align: center; background: var(--tile); color: var(--muted); }
+  .steps3 div.done { background: var(--green-pale); color: var(--green-2); font-weight: 600; }
+  .steps3 div.now { background: var(--yellow-pale); color: #8a6d00; font-weight: 600; }
+  .steps3 div.fail { background: #fde7e7; color: var(--red); font-weight: 600; }
+  .tlist .t { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14.5px; }
+  .tlist .t:last-child { border-bottom: 0; }
+  .tlist .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; }
+  .tlist .ic.out { background: var(--yellow-pale); } .tlist .ic.in { background: var(--green-pale); color: var(--green-2); }
+  .tlist small { display: block; color: var(--muted); font-size: 12.5px; }
+  .tlist .rc { font-size: 12.5px; margin-top: 4px; }
+  .hist { display: flex; align-items: flex-end; gap: 14px; height: 170px; padding-top: 10px; }
+  .hist .d { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; min-width: 0; }
+  .hist .bars { display: flex; gap: 4px; align-items: flex-end; height: 130px; }
+  .hist .bars i { width: 14px; border-radius: 6px 6px 0 0; display: block; }
+  .hist .bars i.share { background: #cfe3bd; } .hist .bars i.used { background: var(--green); }
+  .hist small { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .legend { display: flex; gap: 14px; font-size: 12.5px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .helpbox { display: none; } .helpbox.show { display: block; }
+  .helpbox dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+  .helpbox dt { font-weight: 600; font-size: 14.5px; } .helpbox dd { margin: 2px 0 0; font-size: 14px; color: var(--muted); line-height: 1.45; }
+  @media (max-width: 1100px) { .mf-grid, .mf-water, .helpbox dl { grid-template-columns: 1fr; } .ring { margin: 0 auto; } }
+  .ftable { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  .ftable th { text-align: left; font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .ftable td { padding: 10px 8px; border-bottom: 1px solid var(--line); }
+  .ftable tr:last-child td { border-bottom: 0; }
+  .ftable td.n, .ftable th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .ftable .st { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .ftable .st i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; }
+  .ftable .st.off i { background: var(--red); } .ftable .st.warn i { background: #e0b400; }
   .foot { text-align: right; color: var(--muted); font-size: 12px; margin-top: 2px; }
   .offline-banner { display: none; background: #fde7e7; color: var(--red); padding: 10px 14px; border-radius: 12px; font-size: 14px; }
 
@@ -320,9 +399,9 @@
   </header>
 
   <nav class="tabs" id="tabs">
-    <button data-tab="overview" class="active">Overview</button>
+    <button data-tab="myfarm" class="active">My Farm</button>
+    <button data-tab="overview">Water Authority</button>
     <button data-tab="demo"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>Demo</button>
-    <button data-tab="farms">Farms</button>
     <button data-tab="ledger">Ledger</button>
     <button data-tab="results">Test results</button>
     <button data-tab="how">How it works</button>
@@ -334,10 +413,93 @@
     <div class="offline-banner" id="banner">The dashboard cannot reach the system right now. Retrying…</div>
     <div class="status" id="status"><div class="ico" id="statusIco"></div><div><div class="t" id="statusT">Loading…</div><div class="d" id="statusD"></div></div></div>
 
-    <!-- ============================== OVERVIEW -->
-    <div class="tab show" id="tab-overview">
+
+    <!-- ============================== MY FARM (for farmers) -->
+    <div class="tab show" id="tab-myfarm">
       <section class="card">
-        <div class="head"><div><h2>Today at a glance</h2><div class="sub">One reservoir shared between four farms</div></div></div>
+        <div class="mf-head">
+          <h2>My Farm</h2>
+          <div class="pick" id="mfPick" role="tablist" aria-label="Choose your farm"></div>
+          <span class="pill-sync" id="mfSync"><span class="dot"></span><span id="mfSyncT">Loading…</span></span>
+          <span style="flex:1"></span>
+          <button class="linkbtn" id="mfHelpBtn" onclick="toggleHelp()">How does this page work?</button>
+        </div>
+        <div class="helpbox" id="mfHelp" style="margin-top:16px">
+          <dl>
+            <div><dt>What is my share?</dt><dd>Every morning the water authority gives each farm a share of the reservoir. You can use it, or give part of it to a neighbour.</dd></div>
+            <div><dt>What if my internet goes down?</dt><dd>Keep working. Your farm keeps watering from your share and remembers everything. It sends the updates by itself when the connection is back.</dd></div>
+            <div><dt>Can I cancel a transfer?</dt><dd>No. Once a neighbour receives water, it is theirs. That is why we ask you to confirm before sending.</dd></div>
+            <div><dt>What does “Verify” do?</dt><dd>It checks, with a cryptographic proof, that your transfer is really recorded on all servers, exactly as shown. It is your receipt.</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <div class="mf-grid">
+        <section class="card">
+          <div class="head"><div><h3>My water today</h3><div class="sub" id="mfDay">—</div></div></div>
+          <div class="mf-water">
+            <div class="ring" role="img" id="mfRing" aria-label="Water available">
+              <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="#eef0ea" stroke-width="14"/>
+                <circle id="mfArc" cx="60" cy="60" r="50" fill="none" stroke="#4caf1a" stroke-width="14" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="314"/></svg>
+              <div class="rmid"><div><b id="mfAvail">—</b><span>litres left today</span></div></div>
+            </div>
+            <div>
+              <div class="stats">
+                <div><small>My share today</small><b id="mfShare">—</b></div>
+                <div><small>Used so far</small><b id="mfUsed">—</b></div>
+                <div><small>Given to neighbours</small><b id="mfGiven">—</b></div>
+                <div><small>Received from neighbours</small><b id="mfGot">—</b></div>
+              </div>
+              <div class="hint" id="mfHold"></div>
+            </div>
+          </div>
+          <div class="note-box" id="mfForecast">Measuring how fast you use water…</div>
+        </section>
+
+        <section class="card irr">
+          <div class="head"><div><h3>Irrigation</h3><div class="sub">Your valve opens by itself when the soil is dry</div></div></div>
+          <div class="state"><span class="pill-sync" id="mfValve"><span class="dot"></span><span id="mfValveT">—</span></span></div>
+          <div style="font-size:14px;font-weight:500">Soil moisture: <b id="mfMoist">—</b></div>
+          <div class="meter"><i id="mfMoistBar" style="width:0%"></i></div>
+          <div class="meter-l"><span>dry</span><span>waters below 35% · stops above 60%</span><span>wet</span></div>
+          <div style="margin-top:16px"><button class="btn btn-big" id="mfIrrBtn" onclick="toggleIrrigation()">—</button></div>
+          <div class="hint" id="mfIrrHint">You can turn watering back on at any time.</div>
+        </section>
+      </div>
+
+      <div class="mf-grid">
+        <section class="card" id="mfSendCard">
+          <div class="head"><div><h3>Send water to a neighbour</h3><div class="sub">Give part of your share to another farm</div></div></div>
+          <div class="form">
+            <div class="two">
+              <div><label for="mfTo">To</label><select id="mfTo"></select></div>
+              <div><label for="mfAmt">Amount (litres)</label><input id="mfAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 200"></div>
+            </div>
+            <div class="chips" id="mfChips"></div>
+            <div class="hint" id="mfAmtHint">—</div>
+            <button class="btn green btn-big" id="mfSend" onclick="askConfirm()">Review transfer</button>
+            <div id="mfConfirm"></div>
+            <div id="mfProgress"></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="head"><div><h3>My transfers today</h3><div class="sub">Newest first. Press <b>Verify</b> for a receipt you can trust.</div></div></div>
+          <div class="tlist" id="mfTransfers"><div class="sub">No transfers yet today.</div></div>
+        </section>
+      </div>
+
+      <section class="card">
+        <div class="head"><div><h3>My last days</h3><div class="sub">Your share compared with what you used</div></div>
+          <div class="legend"><span><i style="background:#cfe3bd"></i>share</span><span><i style="background:#4caf1a"></i>used</span></div></div>
+        <div class="hist" id="mfHist"><div class="sub">Loading…</div></div>
+      </section>
+    </div>
+
+    <!-- ============================== OVERVIEW -->
+    <div class="tab" id="tab-overview">
+      <section class="card">
+        <div class="head"><div><h2>Water Authority: today at a glance</h2><div class="sub">The whole reservoir and all four farms</div></div></div>
         <div class="tiles">
           <div class="tile hero"><div class="label">Water Released Today</div><div class="big" id="limit">—<small>L</small></div>
             <div class="note" id="limitNote">Reservoir release for today</div></div>
@@ -373,6 +535,16 @@
           <div id="alerts" style="margin-top:8px"></div>
         </section>
       </div>
+      <div class="row2b">
+        <section class="card">
+          <div class="head"><div><h3>All Farms</h3><div class="sub">Each farm's share and use today, as recorded by the ledger</div></div></div>
+          <table class="ftable" id="farmTable"></table>
+        </section>
+        <section class="card" id="usage">
+          <div class="head"><div><h3>Water Used per Farm</h3><div class="sub">Litres each farm has watered today</div></div><div class="help" title="Taken from the ledger, so it only includes usage the farms have already reported. An offline farm’s usage appears when it reconnects.">?</div></div>
+          <div class="chart" id="chart"></div><div class="xl" id="chartX"></div>
+        </section>
+      </div>
     </div>
 
     <!-- ============================== DEMO -->
@@ -386,34 +558,6 @@
         <section class="card live">
           <h3>Live view</h3><div class="sub">Watch this while you click</div>
           <div id="live"></div>
-        </section>
-      </div>
-    </div>
-
-    <!-- ============================== FARMS -->
-    <div class="tab" id="tab-farms">
-      <section class="card" id="farms">
-        <div class="head"><div><h2>Farms</h2><div class="sub">Each farm spends only its own share, online or offline</div></div></div>
-        <div class="farms" id="farmCards"></div>
-      </section>
-      <div class="row2b">
-        <section class="card" id="usage">
-          <div class="head"><div><h3>Water Used per Farm</h3><div class="sub">Litres each farm has watered today</div></div><div class="help" title="Taken from the ledger, so it only includes usage the farms have already reported. An offline farm’s usage appears when it reconnects.">?</div></div>
-          <div class="chart" id="chart"></div><div class="xl" id="chartX"></div>
-        </section>
-        <section class="card" id="transfer">
-          <div class="head"><div><h3>Send Water</h3><div class="sub">Give part of one farm’s share to another farm</div></div></div>
-          <div class="form">
-            <div class="two">
-              <div><label>From</label><select id="from"></select></div>
-              <div><label>To</label><select id="to"></select></div>
-            </div>
-            <div><label>Amount (litres)</label><input id="amount" type="number" min="1" value="200"></div>
-            <button class="btn green" id="send" style="justify-content:center;height:44px">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7h13l-4-4M17 17H4l4 4"/></svg>Send transfer</button>
-            <div class="result" id="result">Pick two farms and an amount.</div>
-            <div class="explain">The water is first <b>put on hold</b> at the sender, then <b>saved by the ledger</b>, then confirmed. If the network fails midway it is retried, never sent twice.</div>
-          </div>
         </section>
       </div>
     </div>
@@ -561,26 +705,15 @@ function render() {
   $("alerts").innerHTML = (alerts.length ? alerts : [[ICON.ok, "All clear", "Every node and farm is healthy"]]).slice(0, 4)
     .map(([i, k, v]) => `<div class="alert"><div class="ico">${i}</div><div><div class="k">${k}</div><div class="v">${v}</div></div></div>`).join("");
 
-  // farms
-  $("farmCards").innerHTML = Object.entries(data.farms).map(([name, f]) => {
-    const w = f.wallet || {}, s = f.sync || {}, se = f.sensors || {};
-    const total = (w.allocated || 0) + (w.received || 0) || 1;
-    const p = v => Math.max(0, Math.min(100, (v || 0) / total * 100));
-    const isOn = s.online, reach = !!f.sync;
-    return `<div class="farm ${reach && isOn ? "online" : "offline"}">
-      <div class="top"><div class="title">${name}</div><span class="chip ${reach && isOn ? "leader" : "down"}">${!reach ? "unreachable" : isOn ? "online" : "offline"}</span></div>
-      <div class="kv"><b>Valve:</b> <span>${se.valve_open ? "open, watering" : "closed"}</span><br>
-        <b>Share today:</b> <span>${fmt(w.allocated)} L</span>${w.received ? ` · <b>Got:</b> <span>+${fmt(w.received)} L</span>` : ""}<br>
-        ${!s.pending_events ? `<span class="synced">✓ Up to date with the ledger</span>` : `<span class="waiting">${s.pending_events} updates waiting to be sent</span>`}</div>
-      <div class="bar"><i class="used" style="width:${p(w.consumed)}%"></i><i class="sent" style="width:${p(w.sent)}%"></i><i class="res" style="width:${p(w.reserved)}%"></i></div>
-      <div class="legend"><span><i style="background:var(--green)"></i>used ${fmt(w.consumed)}</span><span><i style="background:var(--yellow)"></i>given away ${fmt(w.sent)}</span>${w.reserved ? `<span><i style="background:#9bb68a"></i>on hold ${fmt(w.reserved)}</span>` : ""}</div>
-      <div class="avail">${fmt(w.available)}<small> L still available</small></div>
-      <div class="moist">soil moisture <div class="m"><i style="width:${se.soil_moisture || 0}%"></i></div>${se.soil_moisture != null ? Math.round(se.soil_moisture) + "%" : "—"}</div>
-      <div class="actions">
-        <button class="btn ${isOn ? "light" : ""}" title="${s.link === "down" ? "Restore the network: waiting updates are sent to the ledger" : "Simulate a network failure for this farm"}" onclick="act('${name}','link','${s.link === "down" ? "up" : "down"}')" ${reach ? "" : "disabled"}>${s.link === "down" ? "Reconnect" : "Cut link"}</button>
-        <button class="btn light" onclick="act('${name}','irrigation','${se.irrigation_enabled ? "off" : "on"}')" ${reach ? "" : "disabled"}>${se.irrigation_enabled ? "Stop watering" : "Start watering"}</button>
-      </div></div>`;
-  }).join("");
+  // all farms (Water Authority)
+  const ledgerFarms = Object.fromEntries((st.farms || []).map(f => [f.farm_id, f]));
+  $("farmTable").innerHTML = `<tr><th>Farm</th><th>Status</th><th class="n">Share</th><th class="n">Used</th><th class="n">Given</th><th class="n">Received</th><th class="n">Left</th></tr>` +
+    Object.entries(data.farms).map(([name, f]) => {
+      const s2 = f.sync, l = ledgerFarms[name] || {};
+      const st2 = !s2 ? ["off", "unreachable"] : !s2.online ? ["off", `offline · ${s2.pending_events} waiting`] : s2.pending_events > 5 ? ["warn", `${s2.pending_events} updates waiting`] : ["", "online"];
+      return `<tr><td><b>${name}</b></td><td><span class="st ${st2[0]}"><i></i>${st2[1]}</span></td><td class="n">${fmt(l.allocated)}</td>
+        <td class="n">${fmt(l.consumed)}</td><td class="n">${fmt(l.sent)}</td><td class="n">${fmt(l.received)}</td><td class="n"><b>${fmt(l.available)}</b></td></tr>`;
+    }).join("");
 
   // chart
   // show the real farms only (a benchmark or chaos day adds test farms)
@@ -591,13 +724,6 @@ function render() {
   const maxUsed = Math.max(1, ...shown.map(f => f.consumed));
   $("chart").innerHTML = shown.map(f => `<div class="col"><div class="b ${f.consumed === maxUsed && f.consumed > 0 ? "max" : ""}" style="height:${Math.max(4, f.consumed / maxUsed * 85)}%"><em>${fmt(f.consumed)} L</em></div></div>`).join("");
   $("chartX").innerHTML = shown.map(f => `<span title="${f.farm_id}">${many ? f.farm_id.replace(/^(\w)\w*-/, "$1") : f.farm_id}</span>`).join("");
-
-  // transfer selects (only fill once)
-  if (!$("from").options.length) {
-    const names = Object.keys(data.farms);
-    $("from").innerHTML = names.map(n => `<option>${n}</option>`).join("");
-    $("to").innerHTML = names.map((n, i) => `<option ${i === 1 ? "selected" : ""}>${n}</option>`).join("");
-  }
 
   // activity
   $("feed").innerHTML = data.activity.map(a => {
@@ -611,6 +737,7 @@ function render() {
   }).join("") || '<div class="sub">No entries yet.</div>';
 
   renderLive(leader, up, nodes);
+  renderMyFarm();
   if (!$("scenList").innerHTML) { renderList(); renderDetail(); }
   else if (sel === "offline" && $("offFarm") && !$("offFarm").options.length) renderDetail();
   updateOffline();
@@ -622,30 +749,216 @@ async function act(farm, action, state) {
   try { await fetch(`/api/farms/${farm}/${action}/${state}`, {method: "POST"}); } finally { busy = false; refresh(); }
 }
 
-$("send").onclick = async () => {
-  const body = {sender: $("from").value, recipient: $("to").value, amount_l: Number($("amount").value)};
-  const box = $("result");
-  if (body.sender === body.recipient) { box.className = "result bad"; box.textContent = "Choose two different farms."; return; }
-  $("send").disabled = true; box.className = "result"; box.textContent = "Putting the water on hold and asking the ledger to save it…";
-  try {
-    const r = await (await fetch("/api/transfer", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)})).json();
-    if (r.status === "committed") { box.className = "result ok"; box.textContent = `Done. Saved as record #${fmt(r.committed_index)}. ${body.recipient} receives the water on its next sync (a few seconds).`; }
-    else if (r.status === "pending") { box.className = "result"; box.textContent = `Waiting: ${r.reason}. The water stays on hold and the transfer is retried automatically.`; }
-    else { box.className = "result bad"; box.textContent = `Not sent: ${r.reason || r.detail}`; }
-  } catch (e) { box.className = "result bad"; box.textContent = "Could not reach the dashboard server."; }
-  $("send").disabled = false; refresh();
-};
 
 
 // ------------------------------------------------------------------ tabs
+
+// ================================================================== My Farm (farmer view)
+// Designed with Nielsen's 10 usability heuristics in mind (see the report for the mapping).
+let myFarm = null, mfSamples = [], mfStep = null, mfLastTransfers = 0, mfLastHist = 0;
+const RECEIPTS = {};
+try { myFarm = localStorage.getItem("aq.myFarm"); } catch (e) {}
+
+function setHTML(el, html) { if (el.innerHTML !== html && el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; } }
+function pickFarm(name) {
+  myFarm = name; mfSamples = [];
+  try { localStorage.setItem("aq.myFarm", name); } catch (e) {}
+  $("mfConfirm").innerHTML = ""; $("mfProgress").innerHTML = ""; $("mfAmt").value = "";
+  mfLastTransfers = mfLastHist = 0;
+  renderMyFarm();
+}
+function toggleHelp() {
+  const h = $("mfHelp"); h.classList.toggle("show");
+  $("mfHelpBtn").textContent = h.classList.contains("show") ? "Hide help" : "How does this page work?";
+}
+function ago(sec) { if (sec == null) return "never"; sec = Math.round(sec); return sec < 60 ? `${sec} s ago` : `${Math.round(sec / 60)} min ago`; }
+function hhmm(t) { return t.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}); }
+
+function renderMyFarm() {
+  if (!data) return;
+  const names = Object.keys(data.farms);
+  if (!myFarm || !names.includes(myFarm)) myFarm = names[0];
+  setHTML($("mfPick"), names.map(n => `<button role="tab" aria-selected="${n === myFarm}" class="${n === myFarm ? "on" : ""}" onclick="pickFarm('${n}')">${n}</button>`).join(""));
+  const f = data.farms[myFarm] || {}, w = f.wallet || {}, sy = f.sync, se = f.sensors || {};
+
+  // H1 visibility of system status: is my farm connected and up to date?
+  let cls = "", txt;
+  if (!sy) { cls = "bad"; txt = "Your farm is not answering"; }
+  else if (!sy.online) { cls = "warn"; txt = `Offline: still watering, ${sy.pending_events} updates will be sent later`; }
+  else if (sy.pending_events) { cls = "warn"; txt = `Sending ${sy.pending_events} updates…`; }
+  else txt = `Up to date · synced ${ago(sy.seconds_since_last_sync)}`;
+  $("mfSync").className = "pill-sync " + cls; $("mfSyncT").textContent = txt;
+
+  // H2 match with the real world: litres, "left today", a gauge like a tank
+  const share = (w.allocated || 0) + (w.received || 0) - (w.sent || 0);
+  const pct = share > 0 ? Math.max(0, Math.min(1, (w.available || 0) / share)) : 0;
+  $("mfDay").textContent = w.day ? `Day ${w.day}` : "No day is open yet";
+  $("mfAvail").textContent = fmt(w.available);
+  $("mfArc").style.strokeDashoffset = String(314 * (1 - pct));
+  $("mfArc").setAttribute("stroke", pct < .2 ? "#e5484d" : pct < .4 ? "#e0b400" : "#4caf1a");
+  $("mfRing").setAttribute("aria-label", `${fmt(w.available)} litres left today`);
+  $("mfShare").textContent = fmt(w.allocated) + " L"; $("mfUsed").textContent = fmt(w.consumed) + " L";
+  $("mfGiven").textContent = fmt(w.sent) + " L"; $("mfGot").textContent = fmt(w.received) + " L";
+  $("mfHold").textContent = w.reserved ? `${fmt(w.reserved)} L on hold for a transfer that is being sent.` : "";
+
+  // forecast from the last minutes of use
+  const now = Date.now() / 1000;
+  if (w.consumed != null) { mfSamples.push([now, w.consumed]); mfSamples = mfSamples.filter(([t]) => now - t < 180); }
+  const fc = $("mfForecast");
+  if (!w.day) { fc.className = "note-box"; fc.textContent = "Waiting for the water authority to open the day."; }
+  else if ((w.available || 0) <= 0) { fc.className = "note-box bad"; fc.innerHTML = "<b>Your share for today is used up.</b> The valve stays closed until tomorrow, or until a neighbour sends you water."; }
+  else if (mfSamples.length > 2 && now - mfSamples[0][0] > 15) {
+    const [t0, c0] = mfSamples[0], rate = (w.consumed - c0) / ((now - t0) / 60);
+    if (rate <= 0.01) { fc.className = "note-box ok"; fc.textContent = "You are not using water right now."; }
+    else {
+      const until = new Date(Date.now() + (w.available / rate) * 60000);
+      const low = pct < .2;
+      fc.className = "note-box " + (low ? "warn" : "ok");
+      fc.innerHTML = `${low ? "<b>Running low.</b> " : ""}At your current rate (${fmt(Math.round(rate))} L per minute), your water lasts until about <b>${hhmm(until)}</b>.`;
+    }
+  }
+
+  // irrigation
+  const on = se.irrigation_enabled !== false;
+  $("mfValve").className = "pill-sync " + (se.valve_open ? "" : on ? "warn" : "bad");
+  $("mfValveT").textContent = se.valve_open ? "Valve open: watering now" : se.quota_exhausted ? "Valve closed: no water left" : on ? "Valve closed: soil is moist enough" : "Watering turned off";
+  $("mfMoist").textContent = se.soil_moisture != null ? Math.round(se.soil_moisture) + "%" : "—";
+  $("mfMoistBar").style.width = (se.soil_moisture || 0) + "%";
+  $("mfIrrBtn").textContent = on ? "Turn watering off" : "Turn watering on";
+  $("mfIrrBtn").className = "btn btn-big " + (on ? "" : "green");
+  $("mfIrrBtn").disabled = !sy;
+
+  // send form: neighbours (H6 recognition: a list, not a name to type)
+  const to = $("mfTo"), keep = to.value;
+  const others = names.filter(n => n !== myFarm);
+  if (to.dataset.farm !== myFarm) { to.innerHTML = others.map(n => `<option>${n}</option>`).join(""); to.dataset.farm = myFarm; }
+  else if (keep) to.value = keep;
+  const chips = [50, 100, 250, 500].filter(a => a <= (w.available || 0));
+  setHTML($("mfChips"), chips.map(a => `<button onclick="setAmt(${a})">${a} L</button>`).join("") +
+    ((w.available || 0) > 0 ? `<button onclick="setAmt(Math.floor((data.farms[myFarm].wallet.available || 0) / 2))">half of what is left</button>` : ""));
+  validateAmt();
+
+  if (Date.now() - mfLastTransfers > 6000) loadTransfers();
+  if (Date.now() - mfLastHist > 60000) loadHistory();
+}
+
+function setAmt(a) { $("mfAmt").value = a; validateAmt(); $("mfConfirm").innerHTML = ""; }
+
+// H5 error prevention: check the amount while it is typed, before anything is sent
+function validateAmt() {
+  const w = (data && data.farms[myFarm] && data.farms[myFarm].wallet) || {};
+  const raw = $("mfAmt").value.trim(), a = Number(raw), avail = w.available || 0, h = $("mfAmtHint");
+  let err = null;
+  if (!w.day) err = "No day is open yet, so there is no water to send.";
+  else if (raw === "") err = "";
+  else if (!Number.isInteger(a) || a <= 0) err = "Enter a whole number of litres, more than 0.";
+  else if (a > avail) err = `You only have ${fmt(avail)} L left. Lower the amount.`;
+  if (err === null) { h.className = "hint"; h.textContent = `After sending you will have ${fmt(avail - a)} L left.`; }
+  else { h.className = "hint" + (err ? " err" : ""); h.textContent = err || `You can send up to ${fmt(avail)} L.`; }
+  $("mfSend").disabled = err !== null || mfStep === "sending";
+  return err === null;
+}
+
+// H3 user control: review and confirm, with a clear way out
+function askConfirm() {
+  if (!validateAmt()) return;
+  const a = Number($("mfAmt").value), to = $("mfTo").value, w = data.farms[myFarm].wallet, online = data.farms[myFarm].sync?.online;
+  $("mfConfirm").innerHTML = `<div class="confirm" role="dialog" aria-label="Confirm transfer">
+      Send <b>${fmt(a)} L</b> from <b>${myFarm}</b> to <b>${to}</b>?<br>You will have <b>${fmt(w.available - a)} L</b> left today.
+      <div class="hint" style="margin-top:6px">A transfer cannot be undone once ${to} has received the water.${online ? "" : " Your farm is offline: the water will be held and sent automatically when the connection is back."}</div>
+      <div class="row"><button class="btn green" onclick="sendWater()">Yes, send ${fmt(a)} L</button><button class="btn" onclick="$('mfConfirm').innerHTML=''">Cancel</button></div></div>`;
+}
+
+function steps(state, msg, cls) {
+  const s = {hold: ["now", "", ""], saved: ["done", "done", "done"], waiting: ["done", "now", ""], fail: ["fail", "", ""]}[state];
+  $("mfProgress").innerHTML = `<div class="steps3"><div class="${s[0]}">1. Water on hold</div><div class="${s[1]}">2. Saved by the ledger</div><div class="${s[2]}">3. Confirmed</div></div>
+    <div class="note-box ${cls}" style="margin-top:10px">${msg}</div>`;
+}
+
+// H9 plain error messages that say what happened and what to do
+async function sendWater() {
+  const a = Number($("mfAmt").value), to = $("mfTo").value, from = myFarm;
+  $("mfConfirm").innerHTML = ""; mfStep = "sending"; validateAmt();
+  steps("hold", `<span class="spin" style="border-color:rgba(0,0,0,.2);border-top-color:#333"></span>Putting ${fmt(a)} L on hold and asking the ledger to save the transfer…`, "warn");
+  let r;
+  try {
+    r = await (await fetch("/api/transfer", {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({sender: from, recipient: to, amount_l: a})})).json();
+  } catch (e) { r = {status: "error"}; }
+  mfStep = null;
+  if (r.status === "committed") {
+    steps("saved", `✓ <b>Done.</b> ${fmt(a)} L sent to ${to} (record #${fmt(r.committed_index)}). ${to} receives it on its next sync, within a few seconds.`, "ok");
+    $("mfAmt").value = "";
+  } else if (r.status === "pending") {
+    steps("waiting", `<b>Not confirmed yet.</b> The ledger did not answer (${esc(r.reason || "no answer")}). Your ${fmt(a)} L stay on hold and the transfer is retried automatically. You don't need to do anything, and it will never be sent twice.`, "warn");
+  } else {
+    const why = String(r.reason || r.detail || "");
+    const plain = /available|only has/.test(why) ? `You don't have enough water left for ${fmt(a)} L. Lower the amount.`
+      : /itself/.test(why) ? "You can't send water to your own farm. Choose a neighbour."
+      : /reach|503|error/.test(why + r.status) ? `Your farm could not be reached. Check that it is running, then try again.`
+      : `The transfer was refused: ${esc(why)}`;
+    steps("fail", `<b>Not sent.</b> ${plain} Nothing left your farm.`, "bad");
+  }
+  validateAmt(); refresh(); mfLastTransfers = 0;
+}
+
+async function toggleIrrigation() {
+  const on = (data.farms[myFarm].sensors || {}).irrigation_enabled !== false;
+  await fetch(`/api/farms/${myFarm}/irrigation/${on ? "off" : "on"}`, {method: "POST"});
+  $("mfIrrHint").textContent = on ? "Watering is off. Your remaining water is kept for later. Turn it back on at any time."
+                                  : "Watering is on: the valve opens by itself when the soil gets dry.";
+  refresh();
+}
+
+async function loadTransfers() {
+  mfLastTransfers = Date.now();
+  const farm = myFarm;
+  let r; try { r = await (await fetch(`/api/farm/${farm}/transfers`)).json(); } catch (e) { return; }
+  if (farm !== myFarm) return;
+  const list = r.transfers || [];
+  $("mfTransfers").innerHTML = list.length ? list.map(t => {
+    const out = t.sender === farm, other = out ? t.recipient : t.sender, rc = RECEIPTS[t.log_index];
+    return `<div class="t"><div class="ic ${out ? "out" : "in"}" aria-hidden="true">${out ? "↑" : "↓"}</div>
+      <div>${out ? `Sent <b>${fmt(t.amount_l)} L</b> to ${other}` : `Received <b>${fmt(t.amount_l)} L</b> from ${other}`}<small>record #${fmt(t.log_index)}</small>
+        ${rc ? `<div class="rc" style="color:${rc.ok ? "var(--green-2)" : "var(--red)"}">${rc.ok ? "✓ Verified on all servers: this record is real and unchanged." : "✗ " + esc(rc.msg)}</div>` : ""}</div>
+      <button class="btn" style="height:34px;font-size:13px;padding:0 12px" onclick="verifyT(${t.log_index}, this)">${rc && rc.ok ? "Verified ✓" : "Verify"}</button></div>`;
+  }).join("") : `<div class="sub">No transfers yet today.</div>`;
+}
+
+async function verifyT(index, btn) {
+  btn.disabled = true; btn.textContent = "Checking…";
+  let r, okRes;
+  try { const res = await fetch(`/api/farm/${myFarm}/verify/${index}`); okRes = res.ok; r = await res.json(); } catch (e) { r = {}; }
+  RECEIPTS[index] = okRes && r.ok ? {ok: true} : {ok: false, msg: typeof r.detail === "string" ? r.detail : (r.message || "Could not check this record right now. Try again in a few seconds.")};
+  loadTransfers();
+}
+
+async function loadHistory() {
+  mfLastHist = Date.now();
+  const farm = myFarm;
+  let r; try { r = await (await fetch(`/api/farm/${farm}/history?days=7`)).json(); } catch (e) { return; }
+  if (farm !== myFarm) return;
+  const d = r.days || [], max = Math.max(1, ...d.map(x => Math.max(x.allocated + x.received - x.sent, x.consumed)));
+  $("mfHist").innerHTML = d.length ? d.map(x => {
+    const share = x.allocated + x.received - x.sent;
+    return `<div class="d" title="${x.day}: share ${fmt(share)} L, used ${fmt(x.consumed)} L"><div class="bars">
+      <i class="share" style="height:${share / max * 125}px"></i><i class="used" style="height:${x.consumed / max * 125}px"></i></div>
+      <small>${x.day.slice(5)}</small><small><b>${fmt(x.consumed)}</b> / ${fmt(share)} L</small></div>`;
+  }).join("") : `<div class="sub">No days recorded yet.</div>`;
+}
+$("mfAmt").addEventListener("input", () => { validateAmt(); $("mfConfirm").innerHTML = ""; });
+// H7 flexibility: Enter in the amount box goes straight to the review step
+$("mfAmt").addEventListener("keydown", e => { if (e.key === "Enter") askConfirm(); });
+$("mfTo").addEventListener("change", () => { $("mfConfirm").innerHTML = ""; });
+
 function showTab(name) {
-  if (!$("tab-" + name)) name = "overview";
+  if (!$("tab-" + name)) name = "myfarm";
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("show", t.id === "tab-" + name));
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
 }
 document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
-showTab(location.hash.slice(1) || "overview");
+showTab(location.hash.slice(1) || "myfarm");
 
 // ------------------------------------------------------------------ demo scenarios
 const esc = t => String(t ?? "").replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]));
@@ -664,7 +977,7 @@ const SCEN = [
    watch: "Both copies are marked <b>duplicate</b> and the amount the farm has sent stays the same.",
    acts: [["Re-send twice", "call('dup','POST','duplicate')"]]},
   {key: "over", title: "Spend too much",
-   what: "Asks a farm to give away more water than it has: first at the farm itself, then directly at the ledger. Both must refuse.",
+   what: "Asks a farm to give away more water than it has: first at the farm itself, then directly at the ledger, bypassing the farm. The farm refuses because the water is not there; the ledger refuses because the request is not signed by the farm.",
    watch: "Two refusals, and <b>no water moves</b>.",
    acts: [["Try to overspend", "call('over','POST','overspend')"]]},
   {key: "kill", title: "Crash the leader", docker: true,
@@ -679,6 +992,10 @@ const SCEN = [
    what: "Checks with a Merkle proof that the latest transfer really is in the ledger, without trusting the server. Then changes the amount on a copy: that copy must fail the check.",
    watch: "<b>Verify</b> gives ✓ on every check. <b>Falsify &amp; verify</b> gives ✗, because the record no longer matches the ledger.",
    acts: [["Verify", "call('proof','GET','proof')"], ["Falsify & verify", "call('proof','GET','proof?tamper=true')", "ghost"]]},
+  {key: "fake", title: "A fake farm",
+   what: "Someone pretends to be a farm and reports 500 L of water use in its name: first with no signature, then signed with their own key. Each farm signs its reports with a private key that never leaves the farm, so the ledger must refuse both.",
+   watch: "Two refusals, and the farm’s water used in the <b>live view</b> does not change.",
+   acts: [["Send fake reports", "call('fake','POST','forged')"]]},
   {key: "rules", title: "Check the 7 rules",
    what: "Reads the 3 databases and checks the 7 rules that must always be true, for example “no farm used more than its share” and “all 3 copies are identical”.",
    watch: "Seven ✓ means the system is still correct after everything you just did.",
@@ -686,7 +1003,7 @@ const SCEN = [
 ];
 let sel = "day";
 const RES = {};
-const RUNNING = {day: "Opening the next day…", dup: "Re-sending the transfer…", over: "Asking for too much water…",
+const RUNNING = {fake: "Sending fake reports…", day: "Opening the next day…", dup: "Re-sending the transfer…", over: "Asking for too much water…",
   kill: "Working…", major: "Working…", proof: "Fetching the proof and checking it…", rules: "Checking the 3 databases…"};
 
 function renderList() {
@@ -710,12 +1027,28 @@ function renderDetail() {
     ${c.docker && !canControl ? `<div class="cap-note">Disabled: the dashboard has no access to Docker (see the docker.sock volume in docker-compose.yml).</div>` : ""}
     <div class="acts">${acts}</div>
     <div class="out ${r ? "show " + r.cls : ""}">${r ? r.html : ""}</div>
+    ${termHtml(c.key)}
     <div class="nav"><button onclick="select('${SCEN[Math.max(0, i - 1)].key}')" ${i ? "" : "style='visibility:hidden'"}>← Previous</button>
       <button onclick="select('${SCEN[Math.min(SCEN.length - 1, i + 1)].key}')" ${i < SCEN.length - 1 ? "" : "style='visibility:hidden'"}>Next scenario →</button></div>`;
   const off = $("offFarm");
   if (off) off.value = prevSel || offlineFarm || Object.keys(data?.farms || {}).slice(-1)[0] || "";
 }
-function setRes(key, cls, html) { RES[key] = {cls, html}; renderList(); if (key === sel) renderDetail(); }
+function setRes(key, cls, html, lines) {
+  const prev = (RES[key] && RES[key].term) || [];
+  RES[key] = {cls, html, term: lines ? prev.concat(lines).slice(-40) : prev};
+  renderList(); if (key === sel) renderDetail();
+}
+function clearTerm(key) { if (RES[key]) RES[key].term = []; renderDetail(); }
+function copyCmd(i) { const t = (RES[sel] && RES[sel].term) || []; try { navigator.clipboard.writeText(t[i].cmd); } catch (e) {} }
+function termHtml(key) {
+  const lines = (RES[key] && RES[key].term) || [];
+  const body = lines.length ? lines.map((l, i) => l.cmd.startsWith("#")
+      ? `<div class="line comment">${esc(l.cmd)}</div>`
+      : `<div class="line"><div class="cmd"><span>$ ${esc(l.cmd)}</span><button class="cp" title="Copy command" onclick="copyCmd(${i})">copy</button></div>
+         ${l.out ? `<div class="res ${/HTTP [45]\d\d|failed|FAIL/.test(l.out) ? "err" : ""}">${esc(l.out)}</div>` : ""}</div>`).join("")
+    : `<div class="empty">Run the scenario: the real commands and the system's answers appear here.</div>`;
+  return `<div class="term"><div class="tbar"><span>terminal: what the dashboard just did</span><button onclick="clearTerm('${key}')">clear</button></div>${body}</div>`;
+}
 
 async function call(key, method, path) {
   setRes(key, "wait", `<span class="spin"></span>${RUNNING[key] || "Working…"}`);
@@ -725,7 +1058,7 @@ async function call(key, method, path) {
     r = await res.json();
     if (!res.ok) { setRes(key, "bad", esc(typeof r.detail === "string" ? r.detail : JSON.stringify(r.detail))); return; }
   } catch (e) { setRes(key, "bad", "Could not reach the dashboard server."); return; }
-  setRes(key, r.ok === false ? "bad" : "ok", resultHtml(key, path, r));
+  setRes(key, r.ok === false ? "bad" : "ok", resultHtml(key, path, r), r.terminal);
   refresh();
 }
 
@@ -741,6 +1074,8 @@ function resultHtml(key, path, r) {
     return `<b>${r.tampered ? "Checked a falsified copy: " + esc(r.checked) : "Record #" + r.index + ": " + esc(r.record)}</b>
             <ul>${r.checks.map(c => `<li>${c.skipped ? "–" : c.ok ? "✓" : "✗"} ${esc(c.name)}</li>`).join("")}</ul><b>${esc(r.message)}</b>
             ${r.tampered ? `<div style="opacity:.75;margin-top:4px">The 3 servers still agree with each other. It is the falsified copy that does not match them.</div>` : ""}`;
+  if (key === "fake" && r.attempts)
+    return `<ul>${r.attempts.map(x => `<li>${x.refused ? "✓ Refused" : "✗ Accepted"}: ${esc(x.attempt)}<br><span style="opacity:.7">${esc(x.answer)}</span></li>`).join("")}</ul><b>${esc(r.message)}</b>`;
   if (key === "rules" && r.rows)
     return `<b>${esc(r.message)}</b><ul>${r.rows.map(x => `<li>${x.ok ? "✓" : "✗"} ${esc(x.check)}</li>`).join("")}</ul>`;
   return esc(r.message || JSON.stringify(r));
@@ -753,9 +1088,9 @@ async function tryTransfer() {
   try {
     const r = await (await fetch("/api/transfer", {method: "POST", headers: {"content-type": "application/json"},
       body: JSON.stringify({sender: from, recipient: to, amount_l: 100})})).json();
-    if (r.status === "committed") setRes("major", "ok", `✓ Saved as record #${r.committed_index}: a majority of servers is running.`);
-    else if (r.status === "pending") setRes("major", "wait", `⏳ <b>Not saved yet</b> (${esc(r.reason)}).<br>The 100 L stay on hold at ${from} and the transfer is retried automatically. Now press <b>Restart all</b>.`);
-    else setRes("major", "bad", `Not sent: ${esc(r.reason || r.detail)}`);
+    if (r.status === "committed") setRes("major", "ok", `✓ Saved as record #${r.committed_index}: a majority of servers is running.`, r.terminal);
+    else if (r.status === "pending") setRes("major", "wait", `⏳ <b>Not saved yet</b> (${esc(r.reason)}).<br>The 100 L stay on hold at ${from} and the transfer is retried automatically. Now press <b>Restart all</b>.`, r.terminal);
+    else setRes("major", "bad", `Not sent: ${esc(r.reason || r.detail)}`, r.terminal);
   } catch (e) { setRes("major", "bad", "Could not reach the dashboard server."); }
   refresh();
 }
@@ -764,7 +1099,10 @@ let offlineFarm = null, watchingReconnect = false;
 async function offline(state) {
   const farm = $("offFarm").value;
   offlineFarm = farm;
-  await fetch(`/api/farms/${farm}/link/${state}`, {method: "POST"});
+  let r = {};
+  try { r = await (await fetch(`/api/farms/${farm}/link/${state}`, {method: "POST"})).json(); } catch (e) {}
+  if (RES.offline) RES.offline.term = (RES.offline.term || []).concat(r.terminal || []).slice(-40);
+  else RES.offline = {cls: "wait", html: "", term: r.terminal || []};
   watchingReconnect = state === "up";
   if (state === "up") setRes("offline", "wait", `<span class="spin"></span>${farm} reconnected: sending its waiting updates…`);
   refresh();

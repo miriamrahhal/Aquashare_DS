@@ -1,0 +1,153 @@
+# Mutual TLS between every AquaShare component.
+#
+# Not used by a plain "docker compose up". It is added on top of docker-compose.yml when
+# the .env file contains:
+#   TLS_ENABLED=1
+#   COMPOSE_FILE=docker-compose.yml;docker-compose.tls.yml
+#   COMPOSE_PATH_SEPARATOR=;
+# Create the certificates first: python scripts/make_certs.py
+#
+# Every container gets the AquaShare CA and its own certificate (read-only, in /certs).
+# Its web server only accepts clients that show a certificate signed by the CA, and every
+# call it makes shows its own certificate. Raft messages between ledger nodes use the same
+# certificates over gRPC. Only the dashboard accepts browsers without a certificate.
+# Not covered: PostgreSQL (each database is on its own private network) and RabbitMQ.
+
+x-tls-env: &tls-env
+  TLS_ENABLED: "1"
+  TLS_CA: /certs/ca.crt
+  UVICORN_SSL_CA_CERTS: /certs/ca.crt
+  UVICORN_SSL_CERT_REQS: "2"          # 2 = a client certificate is required
+
+x-certs: &certs
+  - ./certs:/certs:ro
+
+x-ledger-urls: &ledger-urls ledger-1=https://ledger-1:8000,ledger-2=https://ledger-2:8000,ledger-3=https://ledger-3:8000
+
+services:
+  ledger-1:
+    environment:
+      <<: *tls-env
+      TLS_CERT: /certs/ledger-1.crt
+      TLS_KEY: /certs/ledger-1.key
+      UVICORN_SSL_CERTFILE: /certs/ledger-1.crt
+      UVICORN_SSL_KEYFILE: /certs/ledger-1.key
+      HTTP_PEERS: ledger-2=https://ledger-2:8000,ledger-3=https://ledger-3:8000
+    volumes: *certs
+  ledger-2:
+    environment:
+      <<: *tls-env
+      TLS_CERT: /certs/ledger-2.crt
+      TLS_KEY: /certs/ledger-2.key
+      UVICORN_SSL_CERTFILE: /certs/ledger-2.crt
+      UVICORN_SSL_KEYFILE: /certs/ledger-2.key
+      HTTP_PEERS: ledger-1=https://ledger-1:8000,ledger-3=https://ledger-3:8000
+    volumes: *certs
+  ledger-3:
+    environment:
+      <<: *tls-env
+      TLS_CERT: /certs/ledger-3.crt
+      TLS_KEY: /certs/ledger-3.key
+      UVICORN_SSL_CERTFILE: /certs/ledger-3.crt
+      UVICORN_SSL_KEYFILE: /certs/ledger-3.key
+      HTTP_PEERS: ledger-1=https://ledger-1:8000,ledger-2=https://ledger-2:8000
+    volumes: *certs
+
+  gateway-1:
+    environment:
+      <<: *tls-env
+      TLS_CERT: /certs/gateway-1.crt
+      TLS_KEY: /certs/gateway-1.key
+      UVICORN_SSL_CERTFILE: /certs/gateway-1.crt
+      UVICORN_SSL_KEYFILE: /certs/gateway-1.key
+      LEDGER_NODES: *ledger-urls
+    volumes: *certs
+  gateway-2:
+    environment:
+      <<: *tls-env
+      TLS_CERT: /certs/gateway-2.crt
+      TLS_KEY: /certs/gateway-2.key
+      UVICORN_SSL_CERTFILE: /certs/gateway-2.crt
+      UVICORN_SSL_KEYFILE: /certs/gateway-2.key
+      LEDGER_NODES: *ledger-urls
+    volumes: *certs
+  gateway-lb:
+    volumes:
+      - ./gateway/nginx.tls.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/certs:ro
+
+  farm-a:
+    environment:
+      <<: *tls-env
+      TLS_CERT: /certs/farm-a.crt
+      TLS_KEY: /certs/farm-a.key
+      UVICORN_SSL_CERTFILE: /certs/farm-a.crt
+      UVICORN_SSL_KEYFILE: /certs/farm-a.key
+      GATEWAY_URL: https://gateway-lb
+    volumes: [ "farm-a-data:/data", "./certs:/certs:ro" ]
+  farm-b:
+    environment:
+      <<: *tls-env
+      TLS_CERT: /certs/farm-b.crt
+      TLS_KEY: /certs/farm-b.key
+      UVICORN_SSL_CERTFILE: /certs/farm-b.crt
+      UVICORN_SSL_KEYFILE: /certs/farm-b.key
+      GATEWAY_URL: https://gateway-lb
+    volumes: [ "farm-b-data:/data", "./certs:/certs:ro" ]
+  farm-c:
+    environment:
+      <<: *tls-env
+      TLS_CERT: /certs/farm-c.crt
+      TLS_KEY: /certs/farm-c.key
+      UVICORN_SSL_CERTFILE: /certs/farm-c.crt
+      UVICORN_SSL_KEYFILE: /certs/farm-c.key
+      GATEWAY_URL: https://gateway-lb
+    volumes: [ "farm-c-data:/data", "./certs:/certs:ro" ]
+  farm-d:
+    environment:
+      <<: *tls-env
+      TLS_CERT: /certs/farm-d.crt
+      TLS_KEY: /certs/farm-d.key
+      UVICORN_SSL_CERTFILE: /certs/farm-d.crt
+      UVICORN_SSL_KEYFILE: /certs/farm-d.key
+      GATEWAY_URL: https://gateway-lb
+    volumes: [ "farm-d-data:/data", "./certs:/certs:ro" ]
+
+  event-relay:
+    environment:
+      TLS_ENABLED: "1"
+      TLS_CA: /certs/ca.crt
+      TLS_CERT: /certs/event-relay.crt
+      TLS_KEY: /certs/event-relay.key
+      LEDGER_NODES: https://ledger-1:8000,https://ledger-2:8000,https://ledger-3:8000
+    volumes: [ "relay-data:/data", "./certs:/certs:ro" ]
+  analytics:
+    environment:
+      <<: *tls-env
+      TLS_CERT: /certs/analytics.crt
+      TLS_KEY: /certs/analytics.key
+      UVICORN_SSL_CERTFILE: /certs/analytics.crt
+      UVICORN_SSL_KEYFILE: /certs/analytics.key
+    volumes: [ "analytics-data:/data", "./certs:/certs:ro" ]
+
+  prometheus:
+    volumes:
+      - ./monitoring/prometheus.tls.yml:/etc/prometheus/prometheus.yml:ro
+      - ./certs:/certs:ro
+
+  dashboard:
+    environment:
+      TLS_ENABLED: "1"
+      TLS_CA: /certs/ca.crt
+      TLS_CERT: /certs/dashboard.crt
+      TLS_KEY: /certs/dashboard.key
+      UVICORN_SSL_CERTFILE: /certs/dashboard.crt
+      UVICORN_SSL_KEYFILE: /certs/dashboard.key     # browsers: HTTPS without a client certificate
+      GATEWAY_URL: https://gateway-lb
+      LEDGER_NODES: *ledger-urls
+      FARM_NODES: farm-a=https://farm-a:8000,farm-b=https://farm-b:8000,farm-c=https://farm-c:8000,farm-d=https://farm-d:8000
+      ANALYTICS_URL: https://analytics:8000
+    volumes:
+      - ./results:/app/results:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./certs:/certs:ro

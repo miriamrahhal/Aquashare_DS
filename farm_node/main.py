@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from farm_node.journal import Journal
 from farm_node.sync import LedgerSync
 from farm_node.wallet import InsufficientWater, Wallet
+from shared import signing
 
 FARM_ID = os.getenv("FARM_ID", "farm-a")
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data")) / FARM_ID
@@ -33,7 +34,9 @@ logging.getLogger("httpx").setLevel(logging.WARNING)     # keep the farm's own m
 log = logging.getLogger(FARM_ID)
 
 wallet = Wallet(FARM_ID, Journal(DATA_DIR / "journal.jsonl"))
-sync = LedgerSync(wallet, FARM_ID, GATEWAY_URL, interval=SYNC_SECONDS)
+SIGN_REPORTS = os.getenv("SIGN_REPORTS", "1") == "1"
+key = signing.load_or_create_key(DATA_DIR / "farm_key.pem") if SIGN_REPORTS else None
+sync = LedgerSync(wallet, FARM_ID, GATEWAY_URL, interval=SYNC_SECONDS, key=key)
 sensors = {"soil_moisture": 50.0, "flow_l_per_tick": 0, "valve_open": False, "irrigation_enabled": True,
            "quota_exhausted": False}
 

@@ -25,7 +25,14 @@ import uuid
 from collections import defaultdict
 from datetime import date, timedelta
 
-import httpx
+import httpx  # noqa: F401  (kept for its exception classes)
+import os as _os
+import sys as _sys
+
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+from shared import tls  # noqa: E402
+
+tls.for_host()          # follow the project's .env: use mutual TLS (as the operator) when it is on
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts import check_invariants  # noqa: E402
@@ -84,7 +91,7 @@ def setup(http):
 
 
 def client(worker, until, day, results):
-    http = httpx.Client(timeout=15)
+    http = tls.Client(timeout=15)
     rng = random.Random(worker)
     while time.time() < until:
         time.sleep(rng.uniform(0.1, 0.5))
@@ -133,7 +140,7 @@ def wait_until_converged(timeout=60):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            st = [httpx.get(f"{u}/status", timeout=2).json() for u in STATUS.values()]
+            st = [tls.get(f"{u}/status", timeout=2).json() for u in STATUS.values()]
             if len({s["last_applied"] for s in st}) == 1 and sum(s["role"] == "leader" for s in st) == 1:
                 return st
         except httpx.HTTPError:
@@ -148,7 +155,7 @@ def main():
     p.add_argument("--workers", type=int, default=4)
     a = p.parse_args()
 
-    http = httpx.Client(timeout=15)
+    http = tls.Client(timeout=15)
     day = setup(http)
     results, actions, stop_event = [], defaultdict(int), threading.Event()
     chaos_thread = threading.Thread(target=chaos, args=(stop_event, actions))

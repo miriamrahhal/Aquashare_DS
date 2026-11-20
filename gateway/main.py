@@ -17,6 +17,8 @@ from fastapi import Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel, Field
 
+from shared import tls
+
 GATEWAY_ID = os.getenv("GATEWAY_ID", "gateway-1")
 LEDGER_NODES = dict(item.split("=", 1) for item in os.getenv(
     "LEDGER_NODES",
@@ -44,7 +46,7 @@ class LedgerClient:
     def __init__(self, nodes: dict, transport=None, retry_seconds=RETRY_SECONDS, pause=0.2):
         self.nodes = list(nodes.values())                  # URLs, in a fixed order
         self.url_of = dict(nodes)                          # node id -> URL
-        self.http = httpx.Client(timeout=6.0, transport=transport)
+        self.http = tls.Client(timeout=6.0, transport=transport)
         self.retry_seconds, self.pause = retry_seconds, pause
         self.leader_url = None
 
@@ -109,6 +111,12 @@ class Consumption(BaseModel):
     day: str
     events: list[ConsumptionEvent]
     cmd_id: str | None = None
+    signature: str | None = None
+
+
+class FarmKey(BaseModel):
+    public_key: str
+    cmd_id: str | None = None
 
 
 class Transfer(BaseModel):
@@ -118,6 +126,7 @@ class Transfer(BaseModel):
     recipient: str
     amount_l: int
     cmd_id: str | None = None
+    signature: str | None = None
 
 
 def create_app(ledger: LedgerClient) -> FastAPI:
@@ -172,6 +181,10 @@ def create_app(ledger: LedgerClient) -> FastAPI:
     @app.post("/farms")
     def register_farm(farm: Farm):
         return run({"type": "register_farm", **farm.model_dump()})
+
+    @app.post("/farms/{farm_id}/key")
+    def register_key(farm_id: str, k: FarmKey):
+        return run({"type": "register_key", "farm_id": farm_id, **k.model_dump()})
 
     @app.post("/days")
     def open_day(day: Day):

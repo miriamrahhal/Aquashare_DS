@@ -71,3 +71,7 @@ CREATE TABLE IF NOT EXISTS applied_commands (
     log_index  BIGINT NOT NULL,
     result     JSONB  NOT NULL
 );
+
+-- Each farm's public key (Ed25519). Once a farm has registered its key, the ledger accepts
+-- its consumption reports and transfers only if they are signed with the matching private key.
+ALTER TABLE farms ADD COLUMN IF NOT EXISTS public_key TEXT;

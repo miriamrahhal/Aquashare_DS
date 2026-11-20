@@ -14,7 +14,14 @@ import sys
 import time
 import uuid
 
-import httpx
+import httpx  # noqa: F401  (kept for its exception classes)
+import os as _os
+import sys as _sys
+
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+from shared import tls  # noqa: E402
+
+tls.for_host()          # follow the project's .env: use mutual TLS (as the operator) when it is on
 
 PORTS = {"ledger-1": 8701, "ledger-2": 8702, "ledger-3": 8703}
 
@@ -25,11 +32,16 @@ def sh(*args, check=True):
 
 def inside(container, path, body=None, timeout=10):
     """Call a ledger node's API from inside its own container (it is unreachable from outside)."""
-    code = ("import json,sys,urllib.request\n"
-            f"req=urllib.request.Request('http://localhost:8000{path}', data={json.dumps(body).encode() if body else None!r},"
+    scheme = "https" if tls.ENABLED else "http"
+    code = ("import json,os,ssl,sys,urllib.request\n"
+            # with mutual TLS on, the node calls itself with its own certificate (mounted in /certs)
+            "ctx=None\n"
+            "if os.getenv('TLS_ENABLED')=='1':\n"
+            "    ctx=ssl.create_default_context(cafile=os.environ['TLS_CA']); ctx.load_cert_chain(os.environ['TLS_CERT'], os.environ['TLS_KEY'])\n"
+            f"req=urllib.request.Request('{scheme}://localhost:8000{path}', data={json.dumps(body).encode() if body else None!r},"
             " headers={'content-type':'application/json'})\n"
             "try:\n"
-            f"    print(urllib.request.urlopen(req, timeout={timeout}).read().decode())\n"
+            f"    print(urllib.request.urlopen(req, timeout={timeout}, context=ctx).read().decode())\n"
             "except urllib.error.HTTPError as e:\n"
             "    print(json.dumps({'http_error': e.code, 'body': e.read().decode()}))\n"
             "except Exception as e:\n"
@@ -39,7 +51,7 @@ def inside(container, path, body=None, timeout=10):
 
 def status(node):
     try:
-        return httpx.get(f"http://localhost:{PORTS[node]}/status", timeout=2).json()
+        return tls.get(f"http://localhost:{PORTS[node]}/status", timeout=2).json()
     except httpx.HTTPError:
         return None
 
@@ -84,7 +96,7 @@ def main():
     print(f"   {new['node_id']} elected leader in term {new['term']}  ->  two nodes believe they lead, "
           f"but only one has a majority")
 
-    committed = httpx.post(f"http://localhost:{PORTS[new['node_id']]}/command",
+    committed = tls.post(f"http://localhost:{PORTS[new['node_id']]}/command",
                            json={"command": {"type": "test", "value": "committed by the majority",
                                              "cmd_id": str(uuid.uuid4())}}, timeout=10).json()
     step(f"5. the majority keeps working: command committed at index {committed['committed_index']} "
@@ -104,7 +116,7 @@ def main():
         time.sleep(0.5)
     if not healed:
         sys.exit("FAIL: the old leader did not rejoin as a follower")
-    new_entry = httpx.get(f"http://localhost:{PORTS[leader]}/log", params={"start": lost_index, "limit": 1}).json()[0]
+    new_entry = tls.get(f"http://localhost:{PORTS[leader]}/log", params={"start": lost_index, "limit": 1}).json()[0]
     print(f"   {leader} is now a follower in term {healed['term']} (leader {healed['leader_id']})")
     print(f"   entry {lost_index} on {leader} before healing: term {old_entry['term']}, {old_entry['command']}")
     print(f"   entry {lost_index} on {leader} after healing:  term {new_entry['term']}, {new_entry['command']}")

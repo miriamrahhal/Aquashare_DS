@@ -14,6 +14,7 @@ import grpc
 
 from ledger_node.proto import raft_pb2, raft_pb2_grpc
 from ledger_node.storage import Entry
+from shared import tls
 
 FOLLOWER, CANDIDATE, LEADER = "follower", "candidate", "leader"
 
@@ -58,7 +59,7 @@ class RaftNode(raft_pb2_grpc.RaftServicer):
         # Short reconnect backoff, so a peer that restarts is reached again within about a second.
         options = [("grpc.initial_reconnect_backoff_ms", 100), ("grpc.min_reconnect_backoff_ms", 100),
                    ("grpc.max_reconnect_backoff_ms", 1000)]
-        self.stubs = {pid: raft_pb2_grpc.RaftStub(grpc.insecure_channel(addr, options=options))
+        self.stubs = {pid: raft_pb2_grpc.RaftStub(tls.grpc_channel(addr, options=options))
                       for pid, addr in self.peers.items()}
         self.pool = ThreadPoolExecutor(max_workers=max(4, 2 * len(self.peers)))
         self.sending = {pid: False for pid in self.peers}

@@ -19,21 +19,39 @@ import uuid
 import httpx
 
 from farm_node.wallet import UnknownReservation
+from shared import signing, tls
 
 log = logging.getLogger("sync")
 
 
 class LedgerSync:
-    def __init__(self, wallet, farm_id: str, gateway_url: str, interval: float = 5.0, transport=None):
+    def __init__(self, wallet, farm_id: str, gateway_url: str, interval: float = 5.0, transport=None, key=None):
         self.wallet, self.farm_id, self.gateway = wallet, farm_id, gateway_url.rstrip("/")
         self.interval = interval
-        self.http = httpx.Client(timeout=15.0, transport=transport)
+        self.http = tls.Client(timeout=15.0, transport=transport)
         self.link_up = True            # set to False to simulate losing the farm's uplink
         self.online = False
         self.last_sync = None
         self.last_error = None
         self.ledger_balance = None
         self.transfer_lock = threading.Lock()   # one submission at a time per transfer
+        self.key = key                          # the farm's private key (None: reports are not signed)
+        self.key_registered = key is None
+
+    def _sign(self, command: dict, body: dict) -> dict:
+        if self.key is not None:
+            body["signature"] = signing.sign(self.key, command)
+        return body
+
+    def _register_key(self):
+        """Send the farm's public key to the ledger once, before any signed report."""
+        public = signing.public_key_text(self.key)
+        reply = self._post(f"/farms/{self.farm_id}/key", {"public_key": public, "cmd_id": f"key-{self.farm_id}-{public[:16]}"})
+        if reply.status_code == 200:
+            self.key_registered = True
+            log.info("public key registered in the ledger")
+        else:
+            raise RuntimeError(f"the ledger refused this farm's key ({reply.status_code}): {reply.text[:200]}")
 
     def _get(self, path):
         if not self.link_up:
@@ -54,13 +72,16 @@ class LedgerSync:
                 ledger = reply.json()
                 if self.wallet.set_ledger_allocation(ledger["day"], ledger["allocated"]):
                     log.info("ledger opened day %s: allocation %d L", ledger["day"], ledger["allocated"])
+            if not self.key_registered:
+                self._register_key()
             while True:
                 day, batch = self.wallet.pending_consumption()
                 if not batch:
                     break
                 events = [{"event_id": e["event_id"], "seq": e["seq"], "amount_l": e["amount"]} for e in batch]
+                command = {"type": "record_consumption", "farm_id": self.farm_id, "day": day, "events": events}
                 reply = self._post(f"/farms/{self.farm_id}/consumption",
-                                   {"day": day, "events": events, "cmd_id": str(uuid.uuid4())})
+                                   self._sign(command, {"day": day, "events": events, "cmd_id": str(uuid.uuid4())}))
                 if reply.status_code != 200:
                     raise RuntimeError(f"ledger answered {reply.status_code}: {reply.text[:200]}")
                 self.wallet.mark_synced(day, batch[-1]["seq"])
@@ -99,6 +120,7 @@ class LedgerSync:
             body = {"transfer_id": transfer_id, "day": info["day"], "sender": self.farm_id,
                     "recipient": info["recipient"], "amount_l": info["amount"],
                     "cmd_id": f"transfer-{transfer_id}"}          # the same cmd_id on every attempt
+            self._sign({"type": "transfer", **body}, body)
             try:
                 reply = self._post("/transfers", body)
             except httpx.HTTPError as exc:

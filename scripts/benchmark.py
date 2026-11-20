@@ -28,7 +28,14 @@ import uuid
 from datetime import date, timedelta
 from pathlib import Path
 
-import httpx
+import httpx  # noqa: F401  (kept for its exception classes)
+import os as _os
+import sys as _sys
+
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+from shared import tls  # noqa: E402
+
+tls.for_host()          # follow the project's .env: use mutual TLS (as the operator) when it is on
 
 LB = os.getenv("GATEWAY_URL", "http://localhost:8600")
 GATEWAY_1 = "http://localhost:8601"
@@ -44,7 +51,7 @@ seq_lock = threading.Lock()
 def leader():
     for node, url in NODES.items():
         try:
-            s = httpx.get(f"{url}/status", timeout=1).json()
+            s = tls.get(f"{url}/status", timeout=1).json()
             if s["role"] == "leader":
                 return node, s
         except httpx.HTTPError:
@@ -53,7 +60,7 @@ def leader():
 
 
 def setup(day_holder):
-    http = httpx.Client(timeout=15)
+    http = tls.Client(timeout=15)
     for f in FARMS:
         http.post(f"{LB}/farms", json={"farm_id": f, "name": f.title(), "cmd_id": f"register-{f}"})
     state = http.get(f"{LB}/state").json()
@@ -84,7 +91,7 @@ def run_load(base, clients, seconds, day, path_style="gateway"):
     stop_at = time.time() + seconds
 
     def worker():
-        http = httpx.Client(timeout=20)
+        http = tls.Client(timeout=20)
         while time.time() < stop_at:
             t0 = time.perf_counter()
             try:
@@ -120,14 +127,14 @@ def failover_trial(trial):
     while time.time() - stopped < 30:
         for url in others:
             try:
-                r = httpx.post(f"{url}/command", json={"command": {"type": "test", "value": f"failover {trial}",
+                r = tls.post(f"{url}/command", json={"command": {"type": "test", "value": f"failover {trial}",
                                                                    "cmd_id": str(uuid.uuid4())}}, timeout=1.5)
                 if r.status_code == 200:
                     took = time.time() - stopped
                     new = r.json()["leader_id"]
                     subprocess.run(START_CMD.format(node=old), shell=True, capture_output=True)
                     return {"trial": trial, "old_leader": old, "old_term": before["term"], "new_leader": new,
-                            "new_term": httpx.get(f"{NODES[new]}/status", timeout=2).json()["term"],
+                            "new_term": tls.get(f"{NODES[new]}/status", timeout=2).json()["term"],
                             "failover_s": round(took, 2)}
             except httpx.HTTPError:
                 pass
@@ -140,7 +147,7 @@ def wait_for_cluster(timeout=40):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            st = [httpx.get(f"{u}/status", timeout=1).json() for u in NODES.values()]
+            st = [tls.get(f"{u}/status", timeout=1).json() for u in NODES.values()]
             if sum(s["role"] == "leader" for s in st) == 1 and len({s["commit_index"] for s in st}) == 1:
                 return True
         except httpx.HTTPError:
@@ -228,7 +235,7 @@ def main():
     for name, base, style in [("direct to leader", NODES[node], "ledger"), ("1 gateway", GATEWAY_1, "gateway"),
                               ("load balancer\n+ 2 gateways", LB, "gateway")]:
         try:
-            httpx.get(f"{base}/health", timeout=2)
+            tls.get(f"{base}/health", timeout=2)
         except httpx.HTTPError:
             print(f"  {name}: not reachable, skipped")
             continue

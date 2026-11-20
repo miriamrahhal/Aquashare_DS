@@ -7,3 +7,6 @@ data/
 *.jsonl
 node_modules/
 dist/
+# mutual TLS: private keys and local switch, never pushed
+certs/
+.env

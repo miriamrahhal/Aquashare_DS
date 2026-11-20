@@ -15,6 +15,8 @@ from pathlib import Path
 
 import psycopg
 
+from shared import signing
+
 SCHEMA = Path(__file__).with_name("schema.sql")
 
 
@@ -82,6 +84,29 @@ class StateMachine:
         self.conn.execute("INSERT INTO farms (farm_id, name) VALUES (%s, %s)", (farm_id, name))
         return {"farm_id": farm_id}
 
+    def _cmd_register_key(self, cmd, index):
+        """A farm registers its public key, once. Afterwards its reports must be signed with it."""
+        farm_id, key = cmd["farm_id"], cmd["public_key"]
+        if not self._one("SELECT 1 FROM farms WHERE farm_id = %s", farm_id):
+            raise Rejected(f"unknown farm {farm_id}")
+        current = self._one("SELECT public_key FROM farms WHERE farm_id = %s", farm_id)
+        if current == key:
+            return {"farm_id": farm_id, "already_registered": True}
+        if current is not None:
+            raise Rejected(f"farm {farm_id} already has a different key")
+        self.conn.execute("UPDATE farms SET public_key = %s WHERE farm_id = %s", (key, farm_id))
+        return {"farm_id": farm_id}
+
+    def _check_signature(self, cmd, farm_id):
+        """Refuse a report that the farm did not sign, once the farm has registered a key."""
+        key = self._one("SELECT public_key FROM farms WHERE farm_id = %s", farm_id)
+        if key is None:
+            return                                       # no key registered yet: accepted as before
+        if not cmd.get("signature"):
+            raise Rejected(f"signature missing: farm {farm_id} signs all its reports")
+        if not signing.verify(key, cmd, cmd["signature"]):
+            raise Rejected(f"invalid signature: this was not signed by farm {farm_id}")
+
     def _cmd_open_day(self, cmd, index):
         """Open a new irrigation day: set the reservoir's limit and each farm's allocation."""
         day, limit_l = date.fromisoformat(cmd["day"]), int(cmd["limit_l"])
@@ -110,6 +135,7 @@ class StateMachine:
     def _cmd_record_consumption(self, cmd, index):
         """A farm reports water it used (possibly while it was offline). Events already recorded are skipped."""
         farm_id, day = cmd["farm_id"], date.fromisoformat(cmd["day"])
+        self._check_signature(cmd, farm_id)
         balance = self._balance(day, farm_id)
         recorded = skipped = total = 0
         for ev in sorted(cmd["events"], key=lambda e: e["seq"]):
@@ -135,6 +161,7 @@ class StateMachine:
         existing = self._one("SELECT status FROM transfers WHERE transfer_id = %s", tid)
         if existing:
             return {"transfer_id": tid, "status": existing, "duplicate": True}
+        self._check_signature(cmd, sender)
         if sender == recipient:
             raise Rejected("a farm cannot transfer water to itself")
         if amount <= 0:
@@ -196,9 +223,11 @@ class StateMachine:
                 return {"day": None, "farms": []}
             limit_l = self._one("SELECT limit_l FROM daily_limits WHERE day = %s", day)
             rows = self.conn.execute(
-                "SELECT farm_id, allocated, received, sent, consumed, allocated + received - sent - consumed "
-                "FROM farm_balances WHERE day = %s ORDER BY farm_id", (day,)).fetchall()
-        keys = ("farm_id", "allocated", "received", "sent", "consumed", "available")
+                "SELECT b.farm_id, b.allocated, b.received, b.sent, b.consumed, "
+                "b.allocated + b.received - b.sent - b.consumed, f.public_key IS NOT NULL "
+                "FROM farm_balances b JOIN farms f ON f.farm_id = b.farm_id WHERE b.day = %s ORDER BY b.farm_id",
+                (day,)).fetchall()
+        keys = ("farm_id", "allocated", "received", "sent", "consumed", "available", "signs_reports")
         farms = [dict(zip(keys, r)) for r in rows]
         return {"day": day, "limit_l": limit_l, "farms": farms,
                 "total_allocated": sum(f["allocated"] for f in farms),

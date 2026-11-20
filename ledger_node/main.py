@@ -18,6 +18,7 @@ from ledger_node.raft import CommitTimeout, NotLeader, RaftNode
 from ledger_node.storage import MemoryStorage
 from ledger_node.state_machine import StateMachine
 from ledger_node import merkle, metrics
+from shared import tls
 
 NODE_ID = os.getenv("NODE_ID", "ledger-1")
 GRPC_PORT = int(os.getenv("GRPC_PORT", "50051"))
@@ -72,7 +73,10 @@ log.info("state machine resumes after entry %d", applied)
 node = RaftNode(NODE_ID, PEERS, storage, apply_fn=apply, applied_index=applied)
 grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=16))
 raft_pb2_grpc.add_RaftServicer_to_server(node, grpc_server)
-grpc_server.add_insecure_port(f"[::]:{GRPC_PORT}")
+if tls.ENABLED:                                      # Raft messages between nodes: mutual TLS
+    grpc_server.add_secure_port(f"[::]:{GRPC_PORT}", tls.grpc_server_credentials())
+else:
+    grpc_server.add_insecure_port(f"[::]:{GRPC_PORT}")
 
 
 @asynccontextmanager
@@ -124,7 +128,7 @@ def submit(body: Command) -> dict:
         if not leader or leader not in HTTP_PEERS:
             raise HTTPException(503, "no leader is currently known; try again shortly")
         try:
-            reply = httpx.post(f"{HTTP_PEERS[leader]}/command", json=body.model_dump(), timeout=6.0)
+            reply = tls.post(f"{HTTP_PEERS[leader]}/command", json=body.model_dump(), timeout=6.0)
         except httpx.HTTPError:
             raise HTTPException(503, f"leader {leader} is unreachable; try again shortly")
         if reply.status_code != 200:

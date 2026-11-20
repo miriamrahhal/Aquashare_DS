@@ -1,0 +1,17 @@
+# Prometheus with mutual TLS (used by docker-compose.tls.yml): it shows its own certificate
+# to every ledger node and gateway it scrapes.
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+scrape_configs:
+  - job_name: ledger
+    scheme: https
+    tls_config: { ca_file: /certs/ca.crt, cert_file: /certs/prometheus.crt, key_file: /certs/prometheus.key }
+    static_configs:
+      - targets: ["ledger-1:8000", "ledger-2:8000", "ledger-3:8000"]
+  - job_name: gateway
+    scheme: https
+    tls_config: { ca_file: /certs/ca.crt, cert_file: /certs/prometheus.crt, key_file: /certs/prometheus.key }
+    static_configs:
+      - targets: ["gateway-1:8000", "gateway-2:8000"]

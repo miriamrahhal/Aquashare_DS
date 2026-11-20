@@ -5,6 +5,8 @@ system: the ledger (through the gateway and from each ledger node), the four far
 analytics service. The browser only talks to this server, so no other component needs to
 allow cross-origin requests. It stores nothing itself.
 """
+import contextvars
+import functools
 import hashlib
 import json
 import os
@@ -13,6 +15,7 @@ import subprocess
 import sys
 import time
 import uuid
+from urllib.parse import urlparse
 from datetime import date, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -21,6 +24,8 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+
+from shared import tls
 
 
 def parse(text):
@@ -34,7 +39,71 @@ FARMS = parse(os.getenv("FARM_NODES", "farm-a=http://localhost:8801,farm-b=http:
                                       "farm-c=http://localhost:8803,farm-d=http://localhost:8804"))
 ANALYTICS = os.getenv("ANALYTICS_URL", "http://localhost:8901")
 
-http = httpx.Client(timeout=2.0)
+# ---------------------------------------------------------------- terminal view
+# While a demo scenario runs, every HTTP call the dashboard makes is recorded as the
+# equivalent curl command (with the ports you would use from your own machine) and the
+# real answer, so the Demo tab can show it like a terminal. Polling calls are not recorded.
+TERM = contextvars.ContextVar("TERM", default=None)
+
+
+def _host_map():
+    m = {urlparse(GATEWAY).netloc: "localhost:8600", urlparse(ANALYTICS).netloc: "localhost:8901"}
+    for i, u in enumerate(LEDGERS.values(), start=1):
+        m[urlparse(u).netloc] = f"localhost:{8700 + i}"
+    for i, u in enumerate(FARMS.values(), start=1):
+        m[urlparse(u).netloc] = f"localhost:{8800 + i}"
+    return m
+
+
+def shown_url(url: str) -> str:
+    u = urlparse(url)
+    shown = u._replace(netloc=HOSTS.get(u.netloc, u.netloc)).geturl()
+    return f'"{shown}"' if "?" in shown or "&" in shown else shown
+
+
+def short(text: str, limit: int = 420) -> str:
+    try:
+        text = json.dumps(json.loads(text), separators=(", ", ": "))
+    except ValueError:
+        text = " ".join(text.split())
+    return text if len(text) <= limit else text[:limit] + " …"
+
+
+def term(cmd: str, out: str) -> None:
+    lines = TERM.get()
+    if lines is not None:
+        lines.append({"cmd": cmd, "out": out})
+
+
+def _record(response: httpx.Response) -> None:
+    if TERM.get() is None:
+        return
+    response.read()
+    req = response.request
+    curl = "curl --cacert certs/ca.crt --cert certs/operator.crt --key certs/operator.key" if tls.ENABLED else "curl"
+    cmd = f"{curl} {shown_url(str(req.url))}" if req.method == "GET" else f"{curl} -X {req.method} {shown_url(str(req.url))}"
+    if req.content:
+        cmd += f" -H 'Content-Type: application/json' -d '{short(req.content.decode(), 300)}'"
+    term(cmd, f"HTTP {response.status_code}  {short(response.text, 220 if req.method == 'GET' else 420)}")
+
+
+def with_terminal(fn):
+    """Run an endpoint with a fresh terminal log and return the log with its result."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        token = TERM.set([])
+        try:
+            result = fn(*args, **kwargs)
+            if isinstance(result, dict):
+                result = {**result, "terminal": TERM.get()}
+            return result
+        finally:
+            TERM.reset(token)
+    return wrapper
+
+
+http = tls.Client(timeout=2.0, event_hooks={"response": [_record]})
+HOSTS = _host_map()
 pool = ThreadPoolExecutor(max_workers=16)
 app = FastAPI(title="AquaShare dashboard")
 
@@ -44,6 +113,7 @@ def get(url, params=None):
         r = http.get(url, params=params)
         return r.json() if r.status_code == 200 else None
     except (httpx.HTTPError, ValueError):
+        term(f"curl {shown_url(tls.fix(url))}", "connection failed: not reachable")
         return None
 
 
@@ -96,6 +166,7 @@ class TransferBody(BaseModel):
 
 
 @app.post("/api/transfer")
+@with_terminal
 def transfer(body: TransferBody):
     if body.sender not in FARMS:
         raise HTTPException(404, "unknown farm")
@@ -108,6 +179,7 @@ def transfer(body: TransferBody):
 
 
 @app.post("/api/farms/{farm}/{action}/{state}")
+@with_terminal
 def farm_action(farm: str, action: str, state: str):
     if farm not in FARMS or action not in ("link", "irrigation"):
         raise HTTPException(404, "unknown farm or action")
@@ -141,6 +213,7 @@ def control(node: str, action: str) -> None:
     """Stop (like a crash: no grace period) or start a ledger node."""
     if node not in LEDGERS or action not in ("stop", "start"):
         raise HTTPException(404, "unknown node or action")
+    term(f"docker {action} {CONTAINER_PREFIX}{node}", f"{CONTAINER_PREFIX}{node}")
     if CONTROL_CMD:
         subprocess.run(shlex.split(CONTROL_CMD.format(action=action, node=node)), check=True, timeout=20)
         return
@@ -178,12 +251,14 @@ def capabilities():
 
 
 @app.post("/api/demo/ledger/{node}/{action}")
+@with_terminal
 def ledger_action(node: str, action: str):
     control(node, action)
     return {"node": node, "action": action}
 
 
 @app.post("/api/demo/kill-leader")
+@with_terminal
 def kill_leader():
     """Scenario 1: crash the leader and measure how long the cluster takes to elect another one."""
     sts = statuses()
@@ -191,18 +266,23 @@ def kill_leader():
     if not old:
         raise HTTPException(409, "there is no leader to stop right now")
     old_term = sts[old]["term"]
+    get(f"{LEDGERS[old]}/status")                                 # shown in the terminal: who leads now
     started = time.perf_counter()
     control(old, "stop")
-    new, term = wait_for_leader(exclude=old)
+    term("# waiting for the two remaining nodes to elect a new leader…", "")
+    new, new_term = wait_for_leader(exclude=old)
     took = round(time.perf_counter() - started, 2)
+    if new:
+        get(f"{LEDGERS[new]}/status")
     if not new:
         return {"ok": False, "old_leader": old, "message": f"No new leader after {took} s. Is a majority running?"}
-    return {"ok": True, "old_leader": old, "old_term": old_term, "new_leader": new, "new_term": term, "seconds": took,
-            "message": f"{old} crashed. {new} was elected leader for election round {term} after {took} s. "
+    return {"ok": True, "old_leader": old, "old_term": old_term, "new_leader": new, "new_term": new_term, "seconds": took,
+            "message": f"{old} crashed. {new} was elected leader for election round {new_term} after {took} s. "
                        f"Nothing that was saved is lost: the two remaining servers are a majority."}
 
 
 @app.post("/api/demo/lose-majority")
+@with_terminal
 def lose_majority():
     """Scenario 2: stop two of the three ledger nodes, then try a transfer."""
     sts = statuses()
@@ -219,12 +299,15 @@ def lose_majority():
 
 
 @app.post("/api/demo/restart-all")
+@with_terminal
 def restart_all():
     sts = statuses()
     started = [n for n, s in sts.items() if not s]
     for n in started:
         control(n, "start")
-    leader, term = wait_for_leader(seconds=25) if started else (leader_of(sts), None)
+    leader, _ = wait_for_leader(seconds=25) if started else (leader_of(sts), None)
+    if leader:
+        get(f"{LEDGERS[leader]}/status")
     return {"ok": bool(leader), "started": started, "leader": leader,
             "message": (f"Restarted {', '.join(started)}. " if started else "All servers were already running. ")
                        + (f"{leader} leads; the restarted servers copy the records they missed from it."
@@ -237,6 +320,7 @@ def ledger_balance(farm: str, day: str):
 
 
 @app.post("/api/demo/duplicate")
+@with_terminal
 def duplicate():
     """Scenario 4: re-send a transfer that is already committed, with the same identifiers, twice."""
     st = get(f"{GATEWAY}/state")
@@ -275,6 +359,7 @@ def duplicate():
 
 
 @app.post("/api/demo/overspend")
+@with_terminal
 def overspend():
     """Scenario 5: ask for more water than a farm has, at the farm and directly at the ledger."""
     st = get(f"{GATEWAY}/state")
@@ -299,6 +384,45 @@ def overspend():
             "ledger": {"amount": big, "answer": res.get("error") or res, "index": r2.get("committed_index")},
             "message": f"{sender}'s wallet refused {amount:,} L ({farm_answer}). Sent directly to the ledger, "
                        f"{big:,} L was also refused: {res.get('error')}. No water moved."}
+
+
+@app.post("/api/demo/forged")
+@with_terminal
+def forged():
+    """Scenario: someone pretends to be a farm and reports water use in its name.
+
+    The first report has no signature, the second one is signed with the attacker's own key.
+    Both must be refused, because the farm has registered its public key in the ledger."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from shared import signing
+
+    st = get(f"{GATEWAY}/state")
+    if not st or not st.get("day"):
+        raise HTTPException(409, "no day is open")
+    day = st["day"]
+    victim = next((f["farm_id"] for f in st["farms"] if f["farm_id"] in FARMS and f.get("signs_reports")), None)
+    if not victim:
+        return {"ok": False, "message": "No farm has registered a key yet. Rebuild the farms so they sign "
+                                        "their reports, wait one sync (a few seconds), then try again."}
+    before = ledger_balance(victim, day)
+    attempts = []
+    attacker = Ed25519PrivateKey.generate()
+    for label, sign_with in (("No signature", None), ("Signed with the attacker's own key", attacker)):
+        evs = [{"event_id": str(uuid.uuid4()), "seq": 900_000_000 + len(attempts), "amount_l": 500}]
+        body = {"day": day, "events": evs, "cmd_id": str(uuid.uuid4())}
+        if sign_with is not None:
+            body["signature"] = signing.sign(sign_with, {"type": "record_consumption", "farm_id": victim,
+                                                         "day": day, "events": evs})
+        r = http.post(f"{GATEWAY}/farms/{victim}/consumption", json=body, timeout=30)
+        detail = r.json().get("detail")
+        error = detail.get("error") if isinstance(detail, dict) else detail
+        attempts.append({"attempt": label, "refused": r.status_code != 200, "answer": error or "accepted"})
+    after = ledger_balance(victim, day)
+    unchanged = before and after and before["consumed"] == after["consumed"]
+    ok = unchanged and all(a["refused"] for a in attempts)
+    return {"ok": ok, "farm": victim, "attempts": attempts, "consumed": after and after["consumed"],
+            "message": f"Both fake reports of 500 L in the name of {victim} were refused. "
+                       f"{victim} has still used {after['consumed']:,} L." if ok else "A fake report was accepted!"}
 
 
 # ---- Merkle proof, re-implemented here like scripts/verify_proof.py (independent of the ledger code)
@@ -329,7 +453,8 @@ def _fold(leaf, m, size, path):
 
 
 @app.get("/api/demo/proof")
-def proof(tamper: bool = False):
+@with_terminal
+def proof(tamper: bool = False, index: int | None = None):
     """Scenario 6: prove that the latest transfer is in the ledger, optionally after falsifying it."""
     sts = statuses()
     node = leader_of(sts) or next((n for n, s in sts.items() if s), None)
@@ -339,9 +464,15 @@ def proof(tamper: bool = False):
     commit = sts[node]["commit_index"]
     # prove against the size every running node has already committed, so all of them can answer
     size_all = min(s["commit_index"] for s in sts.values() if s)
-    events = get(f"{url}/events", {"after": max(0, commit - 400), "limit": 400}) or []
-    events = [e for e in events if e["log_index"] <= size_all]
-    target = next((e for e in reversed(events) if e["command"].get("type") == "transfer" and e["result"].get("ok")),
+    if index is not None:
+        if index > size_all:
+            raise HTTPException(409, "this record is not on every server yet; try again in a few seconds")
+        events, target = [], {"log_index": index}
+    else:
+        events = get(f"{url}/events", {"after": max(0, commit - 400), "limit": 400}) or []
+        events = [e for e in events if e["log_index"] <= size_all]
+        target = None
+    target = target or next((e for e in reversed(events) if e["command"].get("type") == "transfer" and e["result"].get("ok")),
                   None) or next((e for e in reversed(events) if e["command"].get("type") != "noop"), None)
     if not target:
         raise HTTPException(404, "no record to prove yet")
@@ -371,6 +502,9 @@ def proof(tamper: bool = False):
         checks.append({"name": f"{name} publishes the same root", "ok": bool(other) and other["root"] == p["root"],
                        "detail": "not reachable" if not other else other["root"][:16] + "…", "skipped": not other})
     ok = all(c["ok"] for c in checks if not c.get("skipped"))
+    term(f"python scripts/verify_proof.py --index {e['index']}" + (" --tamper" if tamper else ""),
+         "\n".join(f"{'SKIP' if c.get('skipped') else 'OK  ' if c['ok'] else 'FAIL'}  {c['name']}" for c in checks)
+         + ("\nVERIFIED" if ok else "\nNOT VERIFIED"))
     c = e["command"]
     what = (f"{c.get('sender')} gave {original_amount} L to {c.get('recipient')}" if c.get("type") == "transfer"
             else c.get("type", "record"))
@@ -382,6 +516,7 @@ def proof(tamper: bool = False):
 
 
 @app.get("/api/demo/invariants")
+@with_terminal
 def invariants():
     """Scenario 7: run the invariant checker (I1-I7) on the three ledger databases."""
     if not LEDGER_DSNS:
@@ -410,6 +545,8 @@ def invariants():
         for c in conns.values():
             c.close()
     ok = all(r["ok"] for r in rows)
+    globals()["term"]("python scripts/check_invariants.py",
+                      "\n".join(f"{'PASS' if r['ok'] else 'FAIL'}  {r['check']}  ({r['detail']})" for r in rows))
     return {"ok": ok, "rows": rows, "databases": len(conns),
             "message": f"All 7 rules hold on all {len(conns)} databases." if ok else "A rule is violated!"}
 
@@ -420,6 +557,7 @@ class NewDay(BaseModel):
 
 
 @app.post("/api/demo/new-day")
+@with_terminal
 def new_day(body: NewDay | None = None):
     """Scenario 8: open the next day with the four demo farms, so every demo starts clean."""
     body = body or NewDay()
@@ -467,6 +605,48 @@ def result_file(name: str):
     if "/" in name or ".." in name or f.suffix not in (".png", ".csv") or not f.exists():
         raise HTTPException(404, "no such result")
     return FileResponse(f)
+
+
+# ===================================================================== My Farm (for farmers)
+def check_farm(farm: str) -> None:
+    if farm not in FARMS:
+        raise HTTPException(404, "unknown farm")
+
+
+@app.get("/api/farm/{farm}/history")
+def farm_history(farm: str, days: int = 7):
+    """The farm's share and use for the last days, read from the ledger (one call per day)."""
+    check_farm(farm)
+    st = get(f"{GATEWAY}/state") or {}
+    if not st.get("day"):
+        return {"days": []}
+    last = date.fromisoformat(st["day"])
+    wanted = [(last - timedelta(days=k)).isoformat() for k in range(max(1, min(days, 14)) - 1, -1, -1)]
+    states = list(pool.map(lambda d: (d, get(f"{GATEWAY}/state", {"day": d})), wanted))
+    out = []
+    for d, sd in states:
+        f = next((x for x in (sd or {}).get("farms", []) if x["farm_id"] == farm), None)
+        if f and (sd or {}).get("day") == d:
+            out.append({"day": d, "allocated": f["allocated"], "consumed": f["consumed"],
+                        "sent": f["sent"], "received": f["received"]})
+    return {"days": out}
+
+
+@app.get("/api/farm/{farm}/transfers")
+def farm_transfers(farm: str):
+    check_farm(farm)
+    st = get(f"{GATEWAY}/state") or {}
+    if not st.get("day"):
+        return {"day": None, "transfers": []}
+    rows = get(f"{GATEWAY}/farms/{farm}/transfers", {"day": st["day"]}) or []
+    return {"day": st["day"], "transfers": list(reversed(rows))}
+
+
+@app.get("/api/farm/{farm}/verify/{index}")
+def farm_verify(farm: str, index: int):
+    """Check one of the farm's transfers with a Merkle proof: a receipt the farmer can trust."""
+    check_farm(farm)
+    return proof(index=index)
 
 
 @app.get("/flowchart.png")

@@ -21,6 +21,7 @@ import pika
 
 from analytics.bus import EXCHANGE, connect
 from analytics.events import to_event
+from shared import tls
 
 log = logging.getLogger("relay")
 
@@ -50,7 +51,7 @@ class RabbitPublisher:
 class Relay:
     def __init__(self, nodes: list[str], publisher, position_file: Path, transport=None):
         self.nodes, self.publisher, self.position_file = nodes, publisher, Path(position_file)
-        self.http = httpx.Client(timeout=5.0, transport=transport)
+        self.http = tls.Client(timeout=5.0, transport=transport)
         self.position = int(self.position_file.read_text()) if self.position_file.exists() else 0
         self.published = 0
 
