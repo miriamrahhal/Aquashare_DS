@@ -1,0 +1,88 @@
+# AquaShare ledger on Kubernetes (optional, separate from docker-compose).
+#
+# A StatefulSet runs 3 ledger pods: ledger-0, ledger-1, ledger-2. Each pod has:
+#   - its own PostgreSQL database (a sidecar container with its own persistent disk),
+#     so there is still no shared database, exactly like the Docker version;
+#   - the ledger node (Raft over gRPC on port 50051, HTTP API on port 8000).
+# If a pod is deleted or crashes, Kubernetes recreates it with the same name and the
+# same disk, and Raft brings it back up to date from the leader.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledger                    # headless: gives each pod a fixed DNS name, e.g. ledger-0.ledger
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true  # nodes must find each other before they have elected a leader
+  selector: { app: ledger }
+  ports:
+    - { name: http, port: 8000 }
+    - { name: raft, port: 50051 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ledger
+spec:
+  serviceName: ledger
+  replicas: 3
+  podManagementPolicy: Parallel   # start all three together, Raft needs a majority
+  selector:
+    matchLabels: { app: ledger }
+  template:
+    metadata:
+      labels: { app: ledger }
+    spec:
+      initContainers:
+        # The database runs next to the ledger in the same pod and keeps running
+        # (restartPolicy: Always makes it a "sidecar"). The ledger starts once it is ready.
+        - name: postgres
+          image: postgres:16-alpine
+          restartPolicy: Always
+          env:
+            - { name: POSTGRES_DB, value: ledger }
+            - { name: POSTGRES_USER, value: aquashare }
+            - { name: POSTGRES_PASSWORD, value: aquashare_dev }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: schema, mountPath: /docker-entrypoint-initdb.d }
+          startupProbe:
+            exec: { command: ["pg_isready", "-U", "aquashare", "-d", "ledger", "-h", "127.0.0.1"] }
+            periodSeconds: 2
+            failureThreshold: 60
+      containers:
+        - name: ledger
+          image: aquashare-ledger:k8s
+          imagePullPolicy: Never      # the image is built locally with docker build
+          ports:
+            - { containerPort: 8000, name: http }
+            - { containerPort: 50051, name: raft }
+          env:
+            - { name: DATABASE_URL, value: "postgresql://aquashare:aquashare_dev@127.0.0.1:5432/ledger" }
+          # The node's id is its pod name; its peers are the two other pods.
+          command:
+            - sh
+            - -c
+            - |
+              export NODE_ID=$(hostname)
+              P=""; H=""
+              for i in 0 1 2; do
+                n=ledger-$i
+                [ "$n" = "$NODE_ID" ] && continue
+                P="$P,$n=$n.ledger:50051"
+                H="$H,$n=http://$n.ledger:8000"
+              done
+              export PEERS=${P#,} HTTP_PEERS=${H#,}
+              echo "node $NODE_ID, peers $PEERS"
+              exec uvicorn ledger_node.main:app --host 0.0.0.0 --port 8000
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 3
+      volumes:
+        - name: schema
+          configMap: { name: ledger-schema }
+  volumeClaimTemplates:           # one persistent disk per pod: data survives a pod being deleted
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: 1Gi } }
