@@ -1,9 +1,9 @@
 {
   "unit_tests": {
     "command": "python -m pytest -q",
-    "passed": 82,
+    "passed": 108,
     "failed": 0,
-    "covers": "Raft election and replication, network partition, state machine, wallets, sync, gateway, invariants, Merkle proofs, signed farm reports, mutual TLS"
+    "covers": "Raft election and replication, network partition, state machine, wallets, sync, gateway, invariants, Merkle proofs, signed farm reports, mutual TLS, authorization, majority reads, farm recovery"
   },
   "partition_test": {
     "command": "python scripts/partition_test.py",

@@ -142,6 +142,13 @@ def open_transfers() -> dict:
     """Transfers reserved locally whose outcome on the ledger is not known yet."""
     return wallet.open_reservations()
 
+@app.get("/key")
+def public_key() -> dict:
+    """This farm's public key (never the private one), so the operator can register it again."""
+    return {"farm_id": FARM_ID, "public_key": signing.public_key_text(key) if key else None,
+            "registered": sync.key_registered}
+
+
 @app.get("/sync")
 def sync_status() -> dict:
     return sync.status()

@@ -10,3 +10,8 @@ dist/
 # mutual TLS: private keys and local switch, never pushed
 certs/
 .env
+
+# Spark results and exported data
+spark/data/
+spark/output*/
+spark/data_simulated/

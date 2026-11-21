@@ -85,6 +85,9 @@ class Wallet:
             day.reserved.pop(event["transfer_id"], None)
             self._outgoing.pop(event["transfer_id"], None)
             day.sent += amount
+        elif kind == "recovered":                 # history rebuilt from the ledger after local data was lost
+            day.consumed += amount
+            day.sent += event.get("sent", 0)
         elif kind == "transfer_received":
             day.received += amount
             self._credited.add(event["transfer_id"])
@@ -163,6 +166,21 @@ class Wallet:
             if day in self._ledger_days:
                 return None
             return self._record("allocation", day, amount, source="ledger")
+
+    def recover_from_ledger(self, day: str, consumed: int, sent: int) -> dict | None:
+        """Take over what the ledger already holds for a day this farm has no history for.
+
+        Normally a farm learns about a day before it uses or sends any water, so the ledger
+        shows nothing used yet. If the ledger already shows water used or sent, the farm's
+        journal was lost: the ledger's figures become the farm's starting point, so the farm
+        does not believe it still has its whole share."""
+        with self._lock:
+            balance = self._day(day)
+            missing_consumed = max(0, consumed - balance.consumed)
+            missing_sent = max(0, sent - balance.sent - sum(balance.reserved.values()))
+            if not missing_consumed and not missing_sent:
+                return None
+            return self._record("recovered", day, missing_consumed, sent=missing_sent)
 
     def current_day(self) -> str | None:
         """The latest day opened by the ledger. The farm never decides the day from its own clock."""

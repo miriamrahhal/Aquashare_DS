@@ -128,3 +128,17 @@ def test_farm_registers_its_key_then_signs_every_report(tmp_path):
     report = next(b for p, b in seen if p.endswith("/consumption"))
     command = {"type": "record_consumption", "farm_id": "farm-a", "day": report["day"], "events": report["events"]}
     assert signing.verify(signing.public_key_text(key), command, report["signature"])
+
+
+def test_the_operator_can_replace_a_lost_key(dsn):  # noqa: F811
+    log = Log(StateMachine(dsn))
+    setup_day(log)
+    old, new = Ed25519PrivateKey.generate(), Ed25519PrivateKey.generate()
+    assert log.run(type="register_key", farm_id="farm-a", public_key=signing.public_key_text(old))["ok"]
+    assert not log.run(type="register_key", farm_id="farm-a", public_key=signing.public_key_text(new))["ok"]
+    assert log.run(type="replace_key", farm_id="farm-a", public_key=signing.public_key_text(new))["ok"]
+    signed_new = consumption("farm-a", events(40))
+    assert log.run(**signed_new, signature=signing.sign(new, signed_new))["ok"]          # new key accepted
+    signed_old = consumption("farm-a", events(40))
+    assert not log.run(**signed_old, signature=signing.sign(old, signed_old))["ok"]      # old key refused
+    assert not log.run(type="replace_key", farm_id="farm-a", public_key="not a key")["ok"]

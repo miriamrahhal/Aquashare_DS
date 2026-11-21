@@ -97,6 +97,21 @@ class StateMachine:
         self.conn.execute("UPDATE farms SET public_key = %s WHERE farm_id = %s", (key, farm_id))
         return {"farm_id": farm_id}
 
+    def _cmd_replace_key(self, cmd, index):
+        """The operator replaces a farm's key, for example after the farm lost its data.
+
+        Only the operator may send this (the gateway checks the caller's certificate), so a
+        farm, or someone pretending to be one, still cannot swap a key by itself."""
+        farm_id, key = cmd["farm_id"], cmd["public_key"]
+        if not self._one("SELECT 1 FROM farms WHERE farm_id = %s", farm_id):
+            raise Rejected(f"unknown farm {farm_id}")
+        try:
+            signing.load_public_key(key)                 # refuse anything that is not a valid key
+        except ValueError as exc:
+            raise Rejected(str(exc))
+        self.conn.execute("UPDATE farms SET public_key = %s WHERE farm_id = %s", (key, farm_id))
+        return {"farm_id": farm_id, "replaced": True}
+
     def _check_signature(self, cmd, farm_id):
         """Refuse a report that the farm did not sign, once the farm has registered a key."""
         key = self._one("SELECT public_key FROM farms WHERE farm_id = %s", farm_id)

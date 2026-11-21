@@ -41,9 +41,11 @@ CREATE TABLE IF NOT EXISTS consumption_records (
     seq           BIGINT NOT NULL,
     day           DATE NOT NULL,
     amount_l      BIGINT NOT NULL CHECK (amount_l > 0),
-    log_index     BIGINT NOT NULL,
-    UNIQUE (farm_id, seq)
+    log_index     BIGINT NOT NULL
 );
+-- A farm's seq only keeps its own reports in order. It is not unique forever: a farm that
+-- lost its journal starts counting again. Each report is identified by its event_id.
+ALTER TABLE consumption_records DROP CONSTRAINT IF EXISTS consumption_records_farm_id_seq_key;
 
 CREATE TABLE IF NOT EXISTS transfers (
     transfer_id   UUID PRIMARY KEY,

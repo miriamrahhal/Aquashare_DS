@@ -6,24 +6,27 @@ leader is being elected. Because every command carries a cmd_id that the ledger 
 only once, retrying is always safe, even if the first attempt was committed after all.
 Several gateways can run side by side behind a load balancer.
 """
+import json
 import logging
 import os
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi import Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel, Field
 
-from shared import tls
+from shared import access, tls
 
 GATEWAY_ID = os.getenv("GATEWAY_ID", "gateway-1")
 LEDGER_NODES = dict(item.split("=", 1) for item in os.getenv(
     "LEDGER_NODES",
     "ledger-1=http://localhost:8701,ledger-2=http://localhost:8702,ledger-3=http://localhost:8703").split(",") if item)
 RETRY_SECONDS = float(os.getenv("RETRY_SECONDS", "10"))
+READ_MODE = os.getenv("READ_MODE", "majority")      # "majority" (default) or "leader" (the old behaviour)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -34,6 +37,11 @@ REQUEST_SECONDS = Histogram("aquashare_gateway_request_seconds", "Time to answer
                             ["method", "path", "status"],
                             buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20))
 RETRIES = Counter("aquashare_gateway_retries_total", "Extra attempts needed to reach the ledger leader")
+OUTVOTED = Counter("aquashare_gateway_outvoted_total", "Reads where a ledger node gave a different answer "
+                   "from the majority", ["node"])
+
+# Fields that legitimately differ between nodes and are left out when answers are compared.
+NODE_FIELDS = ("node_id", "last_applied")
 
 
 class LedgerUnavailable(Exception):
@@ -43,12 +51,15 @@ class LedgerUnavailable(Exception):
 class LedgerClient:
     """Finds the leader and retries. The only thing it remembers is which node led last time."""
 
-    def __init__(self, nodes: dict, transport=None, retry_seconds=RETRY_SECONDS, pause=0.2):
+    def __init__(self, nodes: dict, transport=None, retry_seconds=RETRY_SECONDS, pause=0.2, read_mode=READ_MODE):
         self.nodes = list(nodes.values())                  # URLs, in a fixed order
         self.url_of = dict(nodes)                          # node id -> URL
         self.http = tls.Client(timeout=6.0, transport=transport)
         self.retry_seconds, self.pause = retry_seconds, pause
         self.leader_url = None
+        self.read_mode = read_mode
+        self.majority = len(nodes) // 2 + 1                # 2 of 3
+        self.pool = ThreadPoolExecutor(max_workers=len(nodes))
 
     def _order(self):
         return ([self.leader_url] if self.leader_url else []) + [n for n in self.nodes if n != self.leader_url]
@@ -75,7 +86,57 @@ class LedgerClient:
                 raise LedgerUnavailable(f"no ledger majority reachable after {attempts} attempts")
             time.sleep(self.pause)
 
-    def read(self, path: str, params=None) -> dict:
+    def read(self, path: str, params=None):
+        if self.read_mode == "majority":
+            return self.majority_read(path, params)
+        return self.first_read(path, params)
+
+    def _ask(self, node_id, path, params):
+        try:
+            reply = self.http.get(f"{self.url_of[node_id]}{path}", params=params, timeout=3.0)
+            return node_id, reply.json() if reply.status_code == 200 else None
+        except (httpx.HTTPError, ValueError):
+            return node_id, None
+
+    def majority_read(self, path: str, params=None, tries: int = 6):
+        """Ask every node and return only an answer that a majority (2 of 3) agree on.
+
+        Raft makes sure committed data is the same on every honest node. If one node's
+        database was altered (a bug, corruption, or an attacker), its answer is outvoted
+        and reported in "outvoted". A node that is only a little behind can also differ
+        for a moment, so on a tie we ask again a few times before giving up.
+        """
+        for attempt in range(tries):
+            answers = {n: body for n, body in self.pool.map(lambda n: self._ask(n, path, params), self.url_of)
+                       if body is not None}
+            if len(answers) < self.majority:
+                raise LedgerUnavailable(f"only {len(answers)} of {len(self.url_of)} ledger nodes answered: "
+                                        f"no majority to confirm the data")
+            groups: dict[str, list[str]] = {}
+            for node, body in answers.items():
+                data = {k: v for k, v in body.items() if k not in NODE_FIELDS} if isinstance(body, dict) else body
+                groups.setdefault(json.dumps(data, sort_keys=True), []).append(node)
+            agreeing = max(groups.values(), key=len)
+            if len(agreeing) >= self.majority:
+                body = answers[agreeing[0]]
+                outvoted, behind = [], []
+                for n in sorted(set(answers) - set(agreeing)):
+                    other = answers[n]
+                    # a node that has simply applied fewer entries is behind, not lying
+                    if isinstance(other, dict) and isinstance(body, dict) and \
+                            other.get("last_applied", 0) < body.get("last_applied", 0):
+                        behind.append(n)
+                    else:
+                        outvoted.append(n)
+                        OUTVOTED.labels(n).inc()
+                        log.warning("%s gave a different answer for %s than %s: outvoted", n, path, agreeing)
+                if isinstance(body, dict):
+                    body = {**body, "agreed_by": sorted(agreeing), "outvoted": outvoted, "behind": behind}
+                return body
+            time.sleep(0.15)                               # nodes still catching up: ask again
+        raise LedgerUnavailable("the ledger nodes do not agree on this data (no majority)")
+
+    def first_read(self, path: str, params=None) -> dict:
         """Reads go to the leader when it is known (most recent state), otherwise to any live node."""
         for url in self._order():
             try:
@@ -179,23 +240,33 @@ def create_app(ledger: LedgerClient) -> FastAPI:
         return {"gateway": GATEWAY_ID, "nodes": nodes}
 
     @app.post("/farms")
-    def register_farm(farm: Farm):
+    def register_farm(farm: Farm, request: Request):
+        access.require(request, access.ADMINS, "register a farm")
         return run({"type": "register_farm", **farm.model_dump()})
 
     @app.post("/farms/{farm_id}/key")
-    def register_key(farm_id: str, k: FarmKey):
+    def register_key(farm_id: str, k: FarmKey, request: Request):
+        access.require(request, {farm_id}, f"register the key of {farm_id}")
         return run({"type": "register_key", "farm_id": farm_id, **k.model_dump()})
 
+    @app.post("/farms/{farm_id}/key/replace")
+    def replace_key(farm_id: str, k: FarmKey, request: Request):
+        access.require(request, set(), f"replace the key of {farm_id}")      # the operator only
+        return run({"type": "replace_key", "farm_id": farm_id, **k.model_dump()})
+
     @app.post("/days")
-    def open_day(day: Day):
+    def open_day(day: Day, request: Request):
+        access.require(request, access.ADMINS, "open a day")
         return run({"type": "open_day", **day.model_dump()})
 
     @app.post("/farms/{farm_id}/consumption")
-    def record_consumption(farm_id: str, c: Consumption):
+    def record_consumption(farm_id: str, c: Consumption, request: Request):
+        access.require(request, {farm_id}, f"report consumption for {farm_id}")
         return run({"type": "record_consumption", "farm_id": farm_id, **c.model_dump()})
 
     @app.post("/transfers")
-    def transfer(t: Transfer):
+    def transfer(t: Transfer, request: Request):
+        access.require(request, {t.sender}, f"send water from {t.sender}")
         return run({"type": "transfer", **t.model_dump()})
 
     @app.get("/state")

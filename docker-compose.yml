@@ -244,6 +244,18 @@ services:
     depends_on: [ gateway-lb ]
     restart: unless-stopped
 
+  # Batch analytics with Apache Spark (not started by "up"; run it on demand):
+  #   docker compose run --rm spark
+  spark:
+    image: apache/spark:3.5.3-scala2.12-java17-python3-ubuntu
+    profiles: [ "spark" ]
+    user: root
+    working_dir: /app
+    volumes:
+      - ./spark:/app/spark
+    entrypoint: [ "/opt/spark/bin/spark-submit", "--master", "local[*]" ]
+    command: [ "/app/spark/water_report.py", "/app/spark/data", "/app/spark/output" ]
+
 volumes:
   ledger-db-1:
   ledger-db-2:

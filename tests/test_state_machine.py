@@ -162,3 +162,18 @@ def test_events_are_listed_in_log_order_with_their_results(dsn):
     assert [e["log_index"] for e in events] == list(range(1, log.index + 1))
     assert events[-1]["result"]["ok"] is False                       # rejected: listed, marked not ok
     assert [e["log_index"] for e in sm.events(after=3)] == [4, 5]
+
+
+def test_a_farm_that_restarts_its_numbering_is_still_accepted(dsn):
+    """A farm that lost its journal numbers its reports from 1 again. Reports are told apart
+    by their event_id, so new reports with an old seq are recorded, and a resent one is not."""
+    log = Log(StateMachine(dsn))
+    setup_day(log)
+    first = events(100, 50)                                    # seq 1 and 2
+    assert log.run(type="record_consumption", farm_id="farm-a", day=DAY, events=first)["ok"]
+    again = events(30, 20)                                     # the farm starts again at seq 1
+    result = log.run(type="record_consumption", farm_id="farm-a", day=DAY, events=again)
+    assert result["ok"] and result["recorded"] == 2
+    resent = log.run(type="record_consumption", farm_id="farm-a", day=DAY, events=first)
+    assert resent["skipped_duplicates"] == 2                   # the old reports are still counted once
+    assert balances(log.sm)["farm-a"]["consumed"] == 200

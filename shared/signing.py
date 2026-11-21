@@ -52,6 +52,14 @@ def public_key_text(key: Ed25519PrivateKey) -> str:
     return base64.b64encode(raw).decode()
 
 
+def load_public_key(public_key: str) -> Ed25519PublicKey:
+    """Read a public key as public_key_text() writes it. Raises ValueError if it is not one."""
+    try:
+        return Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key, validate=True))
+    except Exception as exc:
+        raise ValueError(f"not a valid public key: {exc}") from None
+
+
 def sign(key: Ed25519PrivateKey, command: dict) -> str:
     return base64.b64encode(key.sign(signed_message(command))).decode()
 

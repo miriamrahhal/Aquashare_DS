@@ -10,7 +10,7 @@ import grpc
 import httpx
 import psycopg
 from ledger_node.storage import MemoryStorage, PostgresStorage
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from ledger_node.proto import raft_pb2_grpc
@@ -18,7 +18,7 @@ from ledger_node.raft import CommitTimeout, NotLeader, RaftNode
 from ledger_node.storage import MemoryStorage
 from ledger_node.state_machine import StateMachine
 from ledger_node import merkle, metrics
-from shared import tls
+from shared import access, tls
 
 NODE_ID = os.getenv("NODE_ID", "ledger-1")
 GRPC_PORT = int(os.getenv("GRPC_PORT", "50051"))
@@ -114,8 +114,9 @@ def read_log(start: int = 1, limit: int = 50) -> list[dict]:
 
 
 @app.post("/command")
-def submit(body: Command) -> dict:
+def submit(body: Command, request: Request) -> dict:
     """Commit a command. A follower forwards it to the current leader."""
+    access.require_prefix(request, ("gateway-", "ledger-"), "write to the ledger directly")
     try:
         started = time.perf_counter()
         index, result = node.submit(body.command)

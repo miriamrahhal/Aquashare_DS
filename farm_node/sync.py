@@ -44,14 +44,20 @@ class LedgerSync:
         return body
 
     def _register_key(self):
-        """Send the farm's public key to the ledger once, before any signed report."""
+        """Send the farm's public key to the ledger once, before any signed report.
+
+        Each attempt has its own cmd_id: registering the same key twice is harmless, and a
+        fixed cmd_id would make the ledger repeat its first answer forever, so a farm whose
+        key was refused would stay refused even after the operator replaced its key."""
         public = signing.public_key_text(self.key)
-        reply = self._post(f"/farms/{self.farm_id}/key", {"public_key": public, "cmd_id": f"key-{self.farm_id}-{public[:16]}"})
+        reply = self._post(f"/farms/{self.farm_id}/key", {"public_key": public, "cmd_id": f"key-{self.farm_id}-{uuid.uuid4()}"})
         if reply.status_code == 200:
             self.key_registered = True
             log.info("public key registered in the ledger")
         else:
-            raise RuntimeError(f"the ledger refused this farm's key ({reply.status_code}): {reply.text[:200]}")
+            raise RuntimeError(f"the ledger refused this farm's key ({reply.status_code}): {reply.text[:200]}. "
+                               f"If this farm lost its data, the operator can run: "
+                               f"python scripts/replace_farm_key.py --farm {self.farm_id}")
 
     def _get(self, path):
         if not self.link_up:
@@ -72,6 +78,11 @@ class LedgerSync:
                 ledger = reply.json()
                 if self.wallet.set_ledger_allocation(ledger["day"], ledger["allocated"]):
                     log.info("ledger opened day %s: allocation %d L", ledger["day"], ledger["allocated"])
+                    # first time this farm sees the day: if the ledger already shows water used or
+                    # sent, this farm's journal was lost, so start from the ledger's figures
+                    if self.wallet.recover_from_ledger(ledger["day"], ledger.get("consumed", 0), ledger.get("sent", 0)):
+                        log.warning("journal was empty but the ledger shows water used on %s: "
+                                    "rebuilt this farm's balance from the ledger", ledger["day"])
             if not self.key_registered:
                 self._register_key()
             while True:

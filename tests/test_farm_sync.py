@@ -106,3 +106,63 @@ def test_days_not_opened_by_the_ledger_are_never_sent(tmp_path):
     wallet.consume("2020-01-01", 100)
     sync.sync_once()
     assert fake.events == {} and wallet.pending_count() == 0
+
+# ------------------------------------------------------------ a farm that lost its data
+class LedgerWithHistory(FakeLedger):
+    """A ledger that already holds 300 L used and 200 L sent by this farm today."""
+    def handler(self, request: httpx.Request):
+        if request.method == "GET" and not request.url.path.endswith("/transfers"):
+            return httpx.Response(200, json={"day": DAY, "allocated": self.allocation,
+                                             "consumed": 300 + sum(self.events.values()), "sent": 200})
+        return super().handler(request)
+
+
+def test_a_farm_that_lost_its_journal_starts_from_the_ledger(tmp_path):
+    wallet, sync = farm(tmp_path, LedgerWithHistory(allocation=1000))   # empty journal, like after a loss
+    sync.sync_once()
+    b = wallet.balance(DAY)
+    assert b["consumed"] == 300 and b["sent"] == 200 and b["available"] == 500   # not the whole 1000 L
+    try:
+        wallet.consume(DAY, 600)
+        assert False, "the farm spent water the ledger already counted"
+    except InsufficientWater:
+        pass
+
+
+def test_the_recovery_survives_a_restart_and_is_not_applied_twice(tmp_path):
+    fake = LedgerWithHistory(allocation=1000)
+    wallet, sync = farm(tmp_path, fake)
+    sync.sync_once()
+    sync.sync_once()                                          # the day is known now: nothing more to recover
+    again = Wallet("farm-a", Journal(tmp_path / "journal.jsonl"))   # the farm restarts and replays its journal
+    assert again.balance(DAY)["available"] == wallet.balance(DAY)["available"] == 500
+
+
+def test_a_normal_farm_recovers_nothing(tmp_path):
+    wallet, sync = farm(tmp_path, FakeLedger(allocation=1000))
+    sync.sync_once()
+    assert not any(e["type"] == "recovered" for e in wallet.events())
+    assert wallet.balance(DAY)["available"] == 1000
+
+
+def test_a_refused_key_is_tried_again_with_a_new_cmd_id(tmp_path):
+    """After the operator replaces a lost key, the farm's next attempt must be a new command,
+    not a retry that the ledger would answer with its first refusal."""
+    from shared import signing
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    seen, answers = [], [409, 200]
+
+    def handler(request: httpx.Request):
+        if request.url.path.endswith("/key"):
+            seen.append(json.loads(request.content)["cmd_id"])
+            return httpx.Response(answers.pop(0), json={})
+        if request.url.path.endswith("/transfers"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json={"day": DAY, "allocated": 1000, "consumed": 0})
+
+    wallet = Wallet("farm-a", Journal(tmp_path / "journal.jsonl"))
+    sync = LedgerSync(wallet, "farm-a", "http://gw", transport=httpx.MockTransport(handler),
+                      key=Ed25519PrivateKey.generate())
+    assert not sync.sync_once()["online"]                   # refused: the old key is still registered
+    assert sync.sync_once()["online"] and sync.key_registered   # the operator replaced it: accepted now
+    assert len(seen) == 2 and seen[0] != seen[1]
