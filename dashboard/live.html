@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AquaShare Live View</title>
+<style>
+:root{--sky:#eaf4f1;--card:#fff;--ink:#1d3327;--mute:#5d7466;--water:#2b8fd6;--field:#5cab4a;--warn:#e08a00;--bad:#d64545;--lie:#8e5cd9;--rmq:#e8702a}
+body{margin:0;background:var(--sky);color:var(--ink);font-family:Inter,"Segoe UI",Arial,sans-serif;padding:12px 16px 20px}
+.wrap{width:100%;margin:0 auto}
+.top{display:flex;justify-content:flex-end;gap:14px;font-size:14px;margin-bottom:4px}
+.top a{color:var(--water);font-weight:700;cursor:pointer;text-decoration:none}
+#welcome{max-width:980px;margin:0 auto}
+#welcome .card{background:#fff;border-radius:18px;padding:22px 26px;margin-bottom:14px;box-shadow:0 6px 16px rgba(40,80,40,.08)}
+#welcome h1{margin:0;font-size:34px}#welcome h2{margin:0 0 10px;font-size:20px}
+#welcome p,#welcome li{font-size:17px;line-height:1.5}
+#welcome .sub{color:var(--mute);font-size:18px;margin:6px 0 0}
+.parts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;padding:0;list-style:none;margin:0}
+.parts li{background:#f4f8f3;border-radius:12px;padding:10px 14px;border-left:6px solid var(--c)}
+.parts b{display:block}
+.steps{counter-reset:s;list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:8px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start}
+.steps li::before{content:counter(s);background:var(--water);color:#fff;border-radius:50%;width:28px;height:28px;display:grid;place-items:center;font-weight:800}
+.go{display:block;margin:6px auto 0;background:#1e6fa8;color:#fff;border:0;border-radius:14px;font-size:20px;font-weight:800;padding:14px 34px;cursor:pointer}
+.go:focus-visible{outline:3px solid #7cc3f2;outline-offset:3px}
+.hidden{display:none}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.two .card{margin-bottom:14px}
+svg{width:100%;height:auto;display:block}
+#view{height:calc(100vh - 50px);width:auto;max-width:100%;margin:0 auto}
+#liveWrap .feed{max-width:900px;margin:10px auto 0}
+.flow{stroke-dasharray:10 12;animation:flow 1.1s linear infinite}
+.slow{stroke-dasharray:6 10;animation:flow 1.8s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-44}}
+.pulse{animation:pulse 1.4s ease-in-out infinite alternate}
+@keyframes pulse{from{opacity:.35}to{opacity:.9}}
+.env{animation:env 3s linear infinite}
+@keyframes env{from{transform:translateX(0)}to{transform:translateX(330px)}}
+@media (prefers-reduced-motion:reduce){.flow,.slow,.pulse,.env{animation:none}}
+.feed{background:var(--card);border-radius:18px;padding:14px 18px;margin-top:10px;box-shadow:0 6px 16px rgba(40,80,40,.08)}
+.feed h2{margin:0 0 8px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.feed ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.feed li{display:grid;grid-template-columns:72px 1fr;gap:10px;font-size:16px;padding:6px 8px;border-radius:10px;border-left:4px solid transparent}
+.feed li:first-child{background:#e2f0fb}
+.feed li.ok{border-left-color:var(--field)}.feed li.warn{border-left-color:var(--warn)}
+.feed li.alarm{border-left-color:var(--bad)}.feed li.lie{border-left-color:var(--lie)}
+.feed time{color:var(--mute);font-variant-numeric:tabular-nums}
+.feed em{display:block;font-style:normal;color:var(--mute);font-size:13px}
+.links{color:var(--mute);font-size:12px;text-align:center;margin-top:8px}
+.links a{color:var(--water)}
+</style>
+</head>
+<body>
+<section id="welcome">
+  <div class="card">
+    <h1><svg width="30" height="38" viewBox="0 0 64 64" style="display:inline;width:30px;vertical-align:-4px"><path d="M32 4C32 4 10 30 10 42a22 22 0 0 0 44 0C54 30 32 4 32 4z" fill="#2b8fd6"/></svg> AquaShare</h1>
+    <p class="sub">A distributed system that shares a limited water supply fairly between farms.</p>
+  </div>
+  <div class="two">
+    <div class="card"><h2>The problem</h2>
+      <p>Farms share one reservoir with a daily limit. Each one needs to know its share, use it even when its internet drops, and nobody should be able to take more, cheat, or lose the records if a server crashes.</p></div>
+    <div class="card"><h2>Our solution</h2>
+      <p>Each morning the operator opens a day and every farm gets a share. Farms water from their own share (escrow) and send signed reports. A ledger kept on 3 servers saves every litre, so the records survive crashes and lies.</p></div>
+  </div>
+  <div class="card"><h2>How it is built</h2>
+    <svg viewBox="0 0 900 150" role="img" aria-label="Farms send to the load balancer and gateways, which write to three ledger servers; events go through RabbitMQ to analytics; Prometheus feeds Grafana">
+      <defs><marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5d7466"/></marker></defs>
+      <g font-size="14" text-anchor="middle">
+        <rect x="10" y="20" width="140" height="70" rx="12" fill="#f1f8ee" stroke="#5cab4a" stroke-width="2.5"/><text x="80" y="50" font-weight="800">4 farms</text><text x="80" y="70" fill="#5d7466" font-size="12">sensors · escrow</text>
+        <rect x="190" y="20" width="160" height="70" rx="12" fill="#eef6ee" stroke="#3c8a50" stroke-width="2.5"/><text x="270" y="50" font-weight="800">Load balancer</text><text x="270" y="70" fill="#5d7466" font-size="12">+ 2 gateways</text>
+        <rect x="390" y="20" width="180" height="70" rx="12" fill="#e6f2fb" stroke="#2b8fd6" stroke-width="2.5"/><text x="480" y="50" font-weight="800">Ledger × 3</text><text x="480" y="70" fill="#5d7466" font-size="12">Raft · PostgreSQL each</text>
+        <rect x="610" y="20" width="130" height="70" rx="12" fill="#fde7d8" stroke="#e8702a" stroke-width="2.5"/><text x="675" y="50" font-weight="800">RabbitMQ</text><text x="675" y="70" fill="#5d7466" font-size="12">events</text>
+        <rect x="770" y="20" width="120" height="70" rx="12" fill="#f4f8f3" stroke="#9db5a6" stroke-width="2.5"/><text x="830" y="50" font-weight="800">Analytics</text><text x="830" y="70" fill="#5d7466" font-size="12">live totals</text>
+        <text x="480" y="132" fill="#5d7466" font-size="13">Prometheus + Grafana watch everything · Spark builds the season report · Kubernetes as backup</text>
+      </g>
+      <path d="M150 55 H186 M350 55 H386 M570 55 H606 M740 55 H766" stroke="#5d7466" stroke-width="2.5" marker-end="url(#a3)"/>
+    </svg>
+  </div>
+  <div class="card"><h2>Distributed systems ideas you will see live</h2>
+    <ul class="parts">
+      <li style="--c:#2b8fd6"><b>Consensus (Raft)</b>3 servers agree on every record; if the leader crashes, another takes over.</li>
+      <li style="--c:#5cab4a"><b>Works offline</b>A farm keeps watering from its own share and syncs later.</li>
+      <li style="--c:#e08a00"><b>Exactly once</b>A transfer sent twice is counted only once.</li>
+      <li style="--c:#8e5cd9"><b>Majority reads</b>If one server lies, the other two outvote it.</li>
+      <li style="--c:#3c8a50"><b>Mutual TLS + roles</b>Every connection shows a certificate; the name decides the rights.</li>
+      <li style="--c:#d9a400"><b>Proof of records</b>Signed reports and Merkle proofs show a record is real.</li>
+    </ul>
+  </div>
+<div class="card"><h2>How mutual TLS protects every connection</h2>
+    <svg viewBox="0 0 900 250" role="img" aria-label="A farm and the load balancer exchange certificates signed by the AquaShare certificate authority">
+      <rect x="350" y="10" width="200" height="60" rx="14" fill="#fff8e1" stroke="#d9a400" stroke-width="3"/>
+      <text x="450" y="38" font-size="18" font-weight="800" text-anchor="middle">AquaShare CA</text>
+      <text x="450" y="58" font-size="13" text-anchor="middle" fill="#5d7466">signs every certificate</text>
+      <path d="M380 70 L190 120 M520 70 L710 120" stroke="#d9a400" stroke-width="2.5" stroke-dasharray="6 6"/>
+      <rect x="40" y="120" width="250" height="110" rx="16" fill="#f1f8ee" stroke="#5cab4a" stroke-width="3"/>
+      <text x="165" y="150" font-size="19" font-weight="800" text-anchor="middle">farm-a</text>
+      <rect x="85" y="165" width="160" height="44" rx="8" fill="#fff" stroke="#5cab4a" stroke-width="2"/>
+      <text x="165" y="185" font-size="13" text-anchor="middle">certificate</text><text x="165" y="201" font-size="13" text-anchor="middle" font-weight="700">name: farm-a</text>
+      <rect x="610" y="120" width="250" height="110" rx="16" fill="#e6f2fb" stroke="#2b8fd6" stroke-width="3"/>
+      <text x="735" y="150" font-size="19" font-weight="800" text-anchor="middle">load balancer</text>
+      <rect x="655" y="165" width="160" height="44" rx="8" fill="#fff" stroke="#2b8fd6" stroke-width="2"/>
+      <text x="735" y="185" font-size="13" text-anchor="middle">certificate</text><text x="735" y="201" font-size="13" text-anchor="middle" font-weight="700">name: gateway</text>
+      <path d="M300 160 H600" stroke="#5d7466" stroke-width="3" marker-end="url(#a2)"/><path d="M600 195 H300" stroke="#5d7466" stroke-width="3" marker-end="url(#a2)"/>
+      <text x="450" y="152" font-size="13" text-anchor="middle" fill="#5d7466">"here is my certificate"</text>
+      <text x="450" y="215" font-size="13" text-anchor="middle" fill="#5d7466">"here is mine"</text>
+      <path d="M440 170 h20 v14 h-20z M444 170 v-5 a6 6 0 0 1 12 0 v5" fill="#3c8a50" stroke="#3c8a50" stroke-width="2"/>
+      <defs><marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5d7466"/></marker></defs>
+    </svg>
+    <ol class="steps">
+      <li><span><b>Both sides show a certificate.</b> Normal HTTPS only checks the server. Mutual TLS also checks the client, so every farm, gateway and script must prove who it is.</span></li>
+      <li><span><b>Both check the signature.</b> A certificate counts only if the AquaShare CA signed it. No certificate, or a fake one: the connection is refused before any request is read.</span></li>
+      <li><span><b>The channel is encrypted.</b> Nobody on the network can read or change the reports.</span></li>
+      <li><span><b>The name decides the rights.</b> The gateway reads the name in the certificate: farm-a may only send its own water; only the operator may open a day (otherwise 403).</span></li>
+      <li><span><b>Inside, the same rule.</b> The 3 ledger servers talk to each other over gRPC with TLS, and each farm also signs its reports with its own key (Ed25519).</span></li>
+    </ol>
+    <p style="color:var(--mute);font-size:15px">This page itself is plain HTTPS: browsers have no certificate, so the dashboard only shows the system and cannot change it.</p>
+  </div>
+  <button class="go" id="go">Start the live view</button>
+</section>
+<div class="wrap hidden" id="liveWrap">
+  <div class="top"><a id="about">How it works</a></div>
+  <svg id="view" viewBox="0 0 900 1330" role="img" aria-label="AquaShare live view"></svg>
+  <div class="feed"><h2>What just happened</h2><ul id="feed"><li><time>--:--:--</time><div>Waiting for the first update…<em>the page asks the dashboard every second</em></div></li></ul></div>
+  <p class="links">Full monitoring: <a href="http://localhost:3000" target="_blank">Grafana</a> · <a href="http://localhost:15672" target="_blank">RabbitMQ console</a> · <a href="/classic">classic dashboard</a></p>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const L = n => (n == null ? "–" : Math.round(n).toLocaleString("en").replace(/,/g, " ")) + " L";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const clock = t => new Date(t * 1000).toLocaleTimeString("en-GB");
+
+let prev = null, notesAfter = 0, seenRecord = 0, lastTransfer = null, lastAccess = null;
+let electedAt = {}, downSince = {}, commitHist = [];
+const feed = [];
+
+function say(text, tech, level = "info", at = Date.now() / 1000) {
+  feed.unshift({at, text, tech, level});
+  feed.length = Math.min(feed.length, 8);
+  $("feed").innerHTML = feed.map(f =>
+    `<li class="${f.level}"><time>${clock(f.at)}</time><div>${esc(f.text)}<em>${esc(f.tech)}</em></div></li>`).join("");
+}
+
+// ------------------------------------------------------------ compare two updates and explain the change
+function explain(d) {
+  for (const n of d.notes) {                         // results demo.py reports (403, refused, no certificate ...)
+    say(n.text, n.tech, n.level, n.at);
+    notesAfter = n.id;
+    if (/refused|403|certificate/i.test(n.text + n.tech)) lastAccess = {at: n.at, text: n.text};
+  }
+  for (const r of d.records) {
+    if (r.index <= seenRecord) continue;
+    seenRecord = r.index;
+    if (!prev) continue;                             // do not replay old history on page load
+    if (r.type === "transfer") {
+      if (r.duplicate) say(`The same transfer arrived again: counted only once`, `exactly-once · cmd_id already applied · index ${r.index}`, "ok");
+      else if (r.ok) { say(`${r.farm} sent ${L(r.amount)} to ${r.recipient}`, `transfer · committed by Raft at index ${r.index}`, "ok");
+                       lastTransfer = {at: Date.now() / 1000, ...r}; }
+      else say(`${r.farm} tried to send ${L(r.amount)}: refused`, `${r.error || "rejected"} · index ${r.index}`, "alarm");
+    } else if (r.type === "open_day") {
+      if (r.ok) say(`A new day opened (${r.day}): each farm got its share`, `open_day · index ${r.index}`, "ok");
+    } else if (r.type === "record_consumption" && !r.ok) {
+      say(`A water report for ${r.farm} was refused`, `${r.error || "rejected"} · index ${r.index}`, "alarm");
+    } else if (r.type === "replace_key") {
+      say(`The operator gave ${r.farm} a new signing key`, `replace_key · admin certificate · index ${r.index}`, "warn");
+    } else if (r.type === "register_key" && !r.ok) {
+      say(`${r.farm} tried to register a different key: refused`, `${r.error || "rejected"}`, "alarm");
+    }
+  }
+  if (!prev) return;
+  for (const [n, s] of Object.entries(d.ledgers)) {
+    const p = prev.ledgers[n] || {};
+    if (p.up && !s.up) { say(`${n} stopped answering`, `crash · ${upCount(d)} of 3 servers left · ${upCount(d) >= 2 ? "majority kept, nothing lost" : "no majority: writes wait"}`, "alarm"); downSince[n] = d.at; }
+    if (!p.up && s.up) { say(`${n} is back and catching up`, `rejoins as ${s.role} · copies the records it missed`, "ok"); delete downSince[n]; }
+    if (s.up && s.role === "leader" && p.role !== "leader") {
+      electedAt[n] = d.at;
+      say(`${n} is now the leader`, `Raft election · term ${p.term ?? "?"} → ${s.term}`, "warn");
+    }
+  }
+  for (const [n, f] of Object.entries(d.farms)) {
+    const p = prev.farms[n] || {};
+    if (p.online && !f.online && f.reachable) say(`${n} lost its connection and keeps watering from its own share`, `escrow · reports stored in its local journal`, "warn");
+    if (!p.reachable && f.reachable && prev) say(`${n} started`, `farm node reachable again`, "ok");
+    if (p.reachable && !f.reachable) say(`${n} stopped`, `farm container not answering`, "alarm");
+    if (!p.online && f.online && p.reachable) say(`${n} is back online and sends what it queued`, `${p.pending || 0} queued reports synced · duplicates ignored`, "ok");
+  }
+  const was = prev.reads.outvoted || [], now = d.reads.outvoted || [];
+  for (const n of now) if (!was.includes(n)) say(`${n} gave a different answer and was outvoted`, `majority read · 2 of 3 agree · the true value is shown`, "lie");
+  for (const n of was) if (!now.includes(n)) say(`${n} agrees with the others again`, `majority read · all 3 agree`, "ok");
+}
+
+const lock = (x, y, on = true, s = 1) => `<g transform="translate(${x},${y}) scale(${s})"><circle r="15" fill="#fff" stroke="${on ? "#3c8a50" : "#d64545"}" stroke-width="2.5"/>
+  <path d="M-5 -2 v-4 a5 5 0 0 1 10 0 v4" fill="none" stroke="${on ? "#3c8a50" : "#d64545"}" stroke-width="2.5"/>
+  <rect x="-7.5" y="-2" width="15" height="11" rx="2" fill="${on ? "#3c8a50" : "#d64545"}"/></g>`;
+let TLS = true;
+const upCount = d => Object.values(d.ledgers).filter(s => s.up).length;
+
+// ------------------------------------------------------------ drawing
+function farmCard(name, f, x, maxShare) {
+  const left = f.available ?? 0, share = f.allocated || 0;
+  const offline = f.reachable && !f.online, stopped = !f.reachable;
+  const level = share ? Math.max(0, Math.min(1, left / maxShare)) : 0;
+  const tankH = Math.round(42 * level), border = stopped ? "#d64545" : offline ? "#e08a00" : "none";
+  const status = stopped ? ["● stopped", "#d64545"] : offline ? ["● offline", "#e08a00"] : ["● online", "#3c9a3c"];
+  const line1 = offline ? `<tspan fill="#e08a00" font-weight="700">still watering</tspan>` : "own tank · escrow";
+  const line2 = offline ? `<tspan fill="#e08a00">${f.pending} reports queued</tspan>`
+              : f.signs === false ? "reports not signed" : "reports signed";
+  const letters = offline && f.pending ? `<g transform="translate(120,62)"><rect width="34" height="24" rx="3" fill="#fff" stroke="#e08a00" stroke-width="2"/><rect x="5" y="-6" width="34" height="24" rx="3" fill="#fff" stroke="#e08a00" stroke-width="2"/><text x="22" y="10" font-size="12" text-anchor="middle" fill="#e08a00" font-weight="800">${f.pending}</text></g>` : "";
+  return `<g transform="translate(${x},385)" ${stopped ? 'opacity=".6"' : ""}>
+    <rect width="190" height="210" rx="18" fill="${offline ? "#fff8ec" : "#fff"}" stroke="${border}" stroke-width="3" filter="url(#sh)"/>
+    <rect x="12" y="44" width="166" height="82" rx="10" fill="url(#${left > 0 ? "rows" : "dry"})"/>
+    <text x="16" y="30" font-size="17" font-weight="800">${name}</text>
+    ${TLS ? `<rect x="22" y="98" width="146" height="22" rx="11" fill="#fff" stroke="#3c8a50" stroke-width="2"/>
+    <path d="M36 107 v-3 a4 4 0 0 1 8 0 v3" fill="none" stroke="#3c8a50" stroke-width="2"/><rect x="34" y="107" width="12" height="8" rx="1.5" fill="#3c8a50"/>
+    <text x="54" y="114" font-size="12" font-weight="700" fill="#2c6b3c">certificate: ${name}</text>` : ""}
+    <text x="174" y="30" font-size="13" text-anchor="end" fill="${status[1]}" font-weight="700">${status[0]}</text>
+    <rect x="18" y="138" width="40" height="58" rx="8" fill="#e6eef0" stroke="#8aa3ad" stroke-width="2"/>
+    <rect x="20" y="${194 - tankH}" width="36" height="${tankH}" rx="6" fill="url(#wat)"/>
+    <text x="70" y="160" font-size="22" font-weight="800" fill="#2b8fd6">${L(left)}</text>
+    <text x="70" y="180" font-size="12" fill="#5d7466">${line1}</text>
+    <text x="70" y="196" font-size="12" fill="#5d7466">${line2}</text>${letters}</g>`;
+}
+
+function book(name, s, x, d) {
+  const outvoted = (d.reads.outvoted || []).includes(name);
+  if (!s.up) {
+    const ago = downSince[name] ? ` · down ${Math.round(d.at - downSince[name])} s` : "";
+    return `<g transform="translate(${x},812)" opacity=".55">
+      <rect width="220" height="150" rx="16" fill="#f3f3f3" stroke="#d64545" stroke-width="3" stroke-dasharray="8 6"/>
+      <path d="M24 30 h78 v78 h-78 z M102 30 h78 v78 h-78 z" fill="#eaeaea" stroke="#aaa" stroke-width="2"/>
+      <text x="110" y="132" font-size="16" font-weight="800" text-anchor="middle" fill="#d64545">${name} · DOWN</text></g>
+      <text x="${x + 110}" y="982" font-size="12" text-anchor="middle" fill="#d64545">not answering${ago}</text>
+      <circle cx="${x + 110}" cy="870" r="20" fill="#fff" stroke="#d64545" stroke-width="3"/>
+      <path d="M${x + 102} 862 l16 16 M${x + 118} 862 l-16 16" stroke="#d64545" stroke-width="3.5" stroke-linecap="round"/>`;
+  }
+  const lead = s.role === "leader";
+  const c = outvoted ? "#8e5cd9" : lead ? "#2b8fd6" : "#5cab4a", fill = outvoted ? "#f3ecfb" : lead ? "#e6f2fb" : "#f1f8ee";
+  const lines = outvoted ? "#c4a8ec" : lead ? "#8fc3ea" : "#9cc78f";
+  const fresh = lead && electedAt[name] && d.at - electedAt[name] < 20;
+  const label = outvoted ? `${name} · OUTVOTED` : lead ? `${name} · ${fresh ? "NEW LEADER" : "leader"}` : `${name} · ${s.role}`;
+  const sub = outvoted ? "its answer differs · ignored" : `term ${s.term} · ${s.commit.toLocaleString("en").replace(/,/g, " ")} records`;
+  const y = lead ? 800 : 812, top = lead ? 12 : 0;
+  return `<g transform="translate(${x},${y})">
+    ${lead ? `<rect x="-6" y="6" width="232" height="168" rx="20" fill="#2b8fd6" class="pulse"/>` : ""}
+    <rect width="220" height="162" rx="16" y="${top}" fill="#fff" stroke="${c}" stroke-width="${lead ? 4 : 3}" ${lead ? "" : 'filter="url(#sh)"'}/>
+    <path d="M24 ${30 + top} h78 v78 h-78 z" fill="${fill}" stroke="${c}" stroke-width="2"/><path d="M102 ${30 + top} h78 v78 h-78 z" fill="${fill}" stroke="${c}" stroke-width="2"/>
+    <path d="M36 ${50 + top} h54 M36 ${64 + top} h54 M36 ${78 + top} h54 M114 ${50 + top} h54 M114 ${64 + top} h54 M114 ${78 + top} h40" stroke="${lines}" stroke-width="3"/>
+    ${lead ? `<circle cx="196" cy="36" r="16" fill="#2b8fd6"/><path d="M196 25 l3.5 7.2 7.9 1.1 -5.7 5.6 1.4 7.9 -7.1 -3.7 -7.1 3.7 1.4 -7.9 -5.7 -5.6 7.9 -1.1z" fill="#fff"/>` : ""}
+    ${outvoted ? `<circle cx="196" cy="24" r="16" fill="#8e5cd9"/><text x="196" y="30" font-size="18" font-weight="800" text-anchor="middle" fill="#fff">!</text>` : ""}
+    <text x="110" y="${132 + top}" font-size="16" font-weight="800" text-anchor="middle" fill="${outvoted ? "#6b3fb3" : lead ? "#1e6fa8" : "#1d3327"}">${label}</text>
+    <text x="110" y="${150 + top}" font-size="12" text-anchor="middle" fill="#5d7466">${sub}</text></g>`;
+}
+
+function gauge(x, value, frac, color, caption) {
+  const a = Math.PI * (1 - Math.max(0.02, Math.min(1, frac)));
+  const ex = (90 * Math.cos(a)).toFixed(1), ey = (-90 * Math.sin(a)).toFixed(1);
+  return `<g transform="translate(${x},1290)">
+    <path d="M-90 0 A90 90 0 0 1 90 0" fill="none" stroke="#e4ece6" stroke-width="18"/>
+    <path d="M-90 0 A90 90 0 0 1 ${ex} ${ey}" fill="none" stroke="${color}" stroke-width="18"/>
+    <text y="-22" font-size="30" font-weight="800" text-anchor="middle">${value}</text>
+    <text y="-4" font-size="12" text-anchor="middle" fill="#5d7466">${caption}</text></g>`;
+}
+
+function draw(d) {
+  TLS = d.tls;
+  const farms = Object.entries(d.farms), xs = [40, 250, 460, 670], canalX = [135, 345, 555, 765];
+  const maxShare = Math.max(1, ...farms.map(([, f]) => f.allocated || 0));
+  const limit = d.limit || 0, left = limit ? limit - d.used : null;
+  const fill = limit ? Math.max(0.05, Math.min(1, left / limit)) : 0.5, waterTop = Math.round(280 - 108 * fill);
+  const wl = 258 + (waterTop - 160) / 3, wr = 642 - (waterTop - 160) / 3;
+  const step = d.step && d.step.title ? d.step : null;
+  const ups = upCount(d), leader = Object.values(d.ledgers).find(s => s.up && s.role === "leader");
+  const term = Math.max(0, ...Object.values(d.ledgers).filter(s => s.up).map(s => s.term));
+  const commit = Math.max(0, ...Object.values(d.ledgers).filter(s => s.up).map(s => s.commit));
+  commitHist.push([d.at, commit]); commitHist = commitHist.filter(([t]) => d.at - t <= 10);
+  const [t0, c0] = commitHist[0], rate = d.at > t0 ? (commit - c0) / (d.at - t0) : 0;
+  const rq = d.rabbit, gwUp = Object.values(d.gateways).filter(Boolean).length;
+
+  const canals = farms.map(([n, f], i) => {
+    const up = 330 + i * 80, x = canalX[i], path = `M${up} 280 C${up} 330 ${x} 320 ${x} 380`;
+    if (f.online) return `<path class="flow" d="${path}" fill="none" stroke="#2b8fd6" stroke-width="7" stroke-linecap="round"/>`;
+    const mx = (up + x) / 2, label = f.reachable ? "connection lost · offline" : "farm stopped";
+    return `<path d="${path}" fill="none" stroke="#d64545" stroke-width="7" stroke-linecap="round" stroke-dasharray="14 12"/>
+      <circle cx="${mx}" cy="318" r="15" fill="#fff" stroke="#d64545" stroke-width="3"/><path d="M${mx - 9} 318 h6 M${mx + 3} 318 h6 M${mx - 3} 312 l6 12" stroke="#d64545" stroke-width="3" stroke-linecap="round"/>
+      <text x="${mx + 20}" y="${i < 2 ? 352 : 312}" font-size="12" text-anchor="${i < 2 ? "start" : "start"}" fill="#d64545" font-weight="700">${label}</text>`;
+  }).join("");
+
+  const tr = lastTransfer && d.at - lastTransfer.at < 25 ? lastTransfer : null;
+  let transfer = "";
+  if (tr) {
+    const a = Object.keys(d.farms).indexOf(tr.farm), b = Object.keys(d.farms).indexOf(tr.recipient);
+    if (a >= 0 && b >= 0) {
+      const x1 = canalX[a] + (b > a ? 47 : -47), x2 = canalX[b] + (b > a ? -47 : 47), mid = (x1 + x2) / 2;
+      transfer = `<path class="flow" d="M${x1} 612 H${x2}" fill="none" stroke="#2b8fd6" stroke-width="6" stroke-linecap="round"/>
+        <rect x="${mid - 62}" y="618" width="124" height="22" rx="11" fill="#2b8fd6"/>
+        <text x="${mid}" y="633" font-size="12" text-anchor="middle" fill="#fff" font-weight="700">${L(tr.amount)} → ${tr.recipient}</text>`;
+    }
+  }
+
+  const acc = lastAccess && d.at - lastAccess.at < 25 ? lastAccess : null;
+  const accText = acc ? `<tspan fill="#d64545" font-weight="700">just refused: ${esc(acc.text).slice(0, 80)}</tspan>`
+    : `${d.tls ? "both sides show a certificate · the name decides the rights" : "no certificates checked"} · ${gwUp} of ${Object.keys(d.gateways).length} gateways · 2 of 3 servers must agree`;
+  const agreed = d.reads.agreed_by.length ? `agreed by ${d.reads.agreed_by.join(", ")}` : "no majority answer";
+
+  const pipeMsgs = rq.up ? Math.min(6, Math.max(rq.in_per_min > 0 ? 2 : 0, rq.queue)) : 0;
+  const env = Array.from({length: pipeMsgs}, (_, i) =>
+    `<rect x="${240 + i * 60}" y="1079" width="22" height="14" rx="2" fill="#fff" stroke="#e8702a" stroke-width="2"/><path d="M${240 + i * 60} 1080 l11 7 l11 -7" fill="none" stroke="#e8702a" stroke-width="2"/>`).join("");
+  const rmqText = rq.up ? `topic exchange · ${rq.queue} waiting · ${rq.in_per_min}/min in · ${rq.consumers} reader${rq.consumers === 1 ? "" : "s"}` : "RabbitMQ not reachable · relay keeps events until it returns";
+
+  $("view").innerHTML = `
+  <defs>
+    <linearGradient id="wat" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc3f2"/><stop offset="1" stop-color="#2b8fd6"/></linearGradient>
+    <pattern id="rows" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(-12)"><rect width="14" height="14" fill="#8bc97a"/><rect width="14" height="6" fill="#5cab4a"/></pattern>
+    <pattern id="dry" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(-12)"><rect width="14" height="14" fill="#d7c08f"/><rect width="14" height="6" fill="#b8875a"/></pattern>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#2a5030" flood-opacity=".12"/></filter>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5d7466"/></marker>
+  </defs>
+  <path d="M32 12 C32 12 20 26 20 33 a12 12 0 0 0 24 0 C44 26 32 12 32 12z" fill="#2b8fd6"/>
+  <text x="54" y="38" font-size="28" font-weight="800">AquaShare</text>
+  <text x="880" y="36" font-size="15" text-anchor="end" fill="#5d7466">Day ${esc(d.day || "not opened")} · <tspan fill="${d.reads.ok ? "#3c9a3c" : "#d64545"}" font-weight="700">● ${d.reads.ok ? "live" : "no answer"}</tspan></text>
+  <rect x="20" y="52" width="860" height="62" rx="16" fill="#1e6fa8"/>
+  <text x="40" y="80" font-size="21" font-weight="800" fill="#fff">▶ NOW: ${esc(step ? step.title : "Waiting for the demo")}</text>
+  <text x="40" y="103" font-size="14" fill="#d6ecfb">${esc(step ? [step.n && step.total ? `Step ${step.n} of ${step.total}` : "", step.hint].filter(Boolean).join(" · ") : "run python scripts/demo.py all in the terminal")}</text>
+
+  <text x="450" y="148" font-size="13" text-anchor="middle" fill="#5d7466" letter-spacing="1.5">THE RESERVOIR · TODAY'S LIMIT</text>
+  <path d="M250 160 H650 L610 280 H290 Z" fill="#dbe7e0" stroke="#9db5a6" stroke-width="3" filter="url(#sh)"/>
+  <path d="M${wl} ${waterTop} H${wr} L${606} 278 H294 Z" fill="url(#wat)"/>
+  <text x="450" y="242" font-size="22" font-weight="800" text-anchor="middle" fill="${waterTop < 222 ? "#fff" : "#1d3327"}">${limit ? `${L(left)} left of ${L(limit)}` : "no day opened yet"}</text>
+  <text x="450" y="264" font-size="13" text-anchor="middle" fill="${waterTop < 248 ? "#e6f4fd" : "#5d7466"}">daily limit · shared out when the day opens</text>
+  ${canals}
+  ${farms.map(([n, f], i) => farmCard(n, f, xs[i], maxShare)).join("")}
+  ${transfer}
+  ${canalX.map((x, i) => farms[i] && farms[i][1].online ? `<path class="slow" d="M${x} 595 V650" stroke="#5d7466" stroke-width="3" marker-end="url(#ar)"/>` : "").join("")}
+  ${canalX.map((x, i) => farms[i] && farms[i][1].online ? lock(x, 622, d.tls) : "").join("")}
+
+  <rect x="40" y="655" width="820" height="72" rx="18" fill="${acc ? "#fdecec" : "#fff"}" stroke="${acc ? "#d64545" : "none"}" stroke-width="2" filter="url(#sh)"/>
+  <path d="M80 670 l14 6 v10 c0 9 -6 15 -14 18 c-8 -3 -14 -9 -14 -18 v-10z" fill="${acc ? "#fbe0e0" : "#e3f0e6"}" stroke="${acc ? "#d64545" : "#3c8a50"}" stroke-width="2.5"/>
+  ${acc ? `<path d="M75 683 l10 10 M85 683 l-10 10" stroke="#d64545" stroke-width="2.5" stroke-linecap="round"/>` : `<path d="M75 688 l4 4 l8 -9" fill="none" stroke="#3c8a50" stroke-width="2.5" stroke-linecap="round"/>`}
+  <text x="110" y="684" font-size="17" font-weight="800">Access check</text>
+  <text x="110" y="706" font-size="13" fill="#5d7466">${accText}</text>
+  <rect x="${d.tls ? 690 : 720}" y="666" width="${d.tls ? 156 : 126}" height="26" rx="13" fill="${d.tls ? "#3c8a50" : "#d64545"}"/>
+  <text x="${d.tls ? 768 : 783}" y="684" font-size="13" font-weight="800" text-anchor="middle" fill="#fff">${d.tls ? "MUTUAL TLS · ON" : "TLS · OFF"}</text>
+  <path class="slow" d="M450 727 V775" stroke="#5d7466" stroke-width="3" marker-end="url(#ar)"/>
+  ${lock(450, 750, d.tls)}<text x="474" y="756" font-size="12" fill="#5d7466">${esc(agreed)} · gRPC over TLS</text>
+
+  <text x="450" y="796" font-size="13" text-anchor="middle" fill="#5d7466" letter-spacing="1.5">THE LEDGER · 3 SERVERS KEPT IN STEP (RAFT)</text>
+  ${Object.entries(d.ledgers).map(([n, s], i) => book(n, s, [70, 340, 610][i], d)).join("")}
+  ${lock(315, 905, d.tls, .8)}${lock(585, 905, d.tls, .8)}
+  <text x="450" y="1000" font-size="13" text-anchor="middle" fill="#5d7466">${ups >= 2 ? "the leader copies each record to the others · saved once 2 of 3 servers have it" : "only " + ups + " server up · no majority, new records wait (nothing is lost)"}</text>
+
+  <rect x="40" y="1015" width="820" height="120" rx="18" fill="#fff" filter="url(#sh)"/>
+  <text x="62" y="1042" font-size="13" fill="#5d7466" letter-spacing="1.5">EVENTS · RABBITMQ</text>
+  <rect x="62" y="1058" width="150" height="56" rx="12" fill="#f4f8f3" stroke="#9db5a6" stroke-width="2"/>
+  <text x="137" y="1082" font-size="14" font-weight="800" text-anchor="middle">Event relay</text><text x="137" y="1100" font-size="12" text-anchor="middle" fill="#5d7466">reads saved records</text>
+  <rect x="232" y="1074" width="420" height="24" rx="12" fill="${rq.up ? "#fde7d8" : "#f0f0f0"}" stroke="${rq.up ? "#e8702a" : "#aaa"}" stroke-width="2"/>
+  <g class="env">${env}</g>
+  <text x="442" y="1068" font-size="12" text-anchor="middle" fill="${rq.up ? "#e8702a" : "#d64545"}" font-weight="700">${rmqText}</text>
+  <rect x="672" y="1058" width="166" height="56" rx="12" fill="#f4f8f3" stroke="#9db5a6" stroke-width="2"/>
+  <text x="755" y="1082" font-size="14" font-weight="800" text-anchor="middle">Analytics</text><text x="755" y="1100" font-size="12" text-anchor="middle" fill="#5d7466">live totals per farm</text>
+
+  <rect x="40" y="1150" width="820" height="170" rx="18" fill="#fff" filter="url(#sh)"/>
+  <text x="62" y="1177" font-size="13" fill="#5d7466" letter-spacing="1.5">METRICS · PROMETHEUS → GRAFANA</text>
+  ${gauge(170, term, (term % 20) / 20 || 0.05, "#2b8fd6", "Raft term · +1 per election")}
+  ${gauge(450, rate.toFixed(1) + "/s", rate / 20, "#e08a00", "records saved per second")}
+  ${gauge(730, `${ups} / 3`, ups / 3, ups >= 2 ? "#5cab4a" : "#d64545", ups >= 2 ? "servers up · majority kept" : "servers up · NO majority")}`;
+}
+
+async function tick() {
+  try {
+    const r = await fetch(`/api/live?notes_after=${notesAfter}`, {cache: "no-store"});
+    const d = await r.json();
+    explain(d); draw(d); prev = d;
+  } catch (e) { /* the dashboard restarts during some steps: keep trying */ }
+  setTimeout(tick, 1000);
+}
+tick();
+function show(live) {
+  $("welcome").classList.toggle("hidden", live); $("liveWrap").classList.toggle("hidden", !live);
+  try { sessionStorage.setItem("aq-live", live ? "1" : ""); } catch (e) {}
+  window.scrollTo(0, 0);
+}
+$("go").onclick = () => show(true);
+$("about").onclick = () => show(false);
+try { if (sessionStorage.getItem("aq-live")) show(true); } catch (e) {}
+</script>
+</body>
+</html>

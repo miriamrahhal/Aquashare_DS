@@ -109,6 +109,48 @@ def wait(seconds, why=""):
     time.sleep(seconds)
 
 
+# ---------------------------------------------------------------- live view
+# The live page (http://localhost:8090) shows which step is running and the results that
+# never reach the ledger (a 403, a refused handshake). If the dashboard is not running,
+# the demo works the same.
+DASH = "http://localhost:8090"
+HINTS = {
+    "day": ("Start a new day", "watch the reservoir: each farm receives its share"),
+    "offline": ("A farm goes offline", "watch the farm: it keeps watering and queues its reports"),
+    "duplicate": ("Same transfer twice", "watch the feed: the resend is counted only once"),
+    "overspend": ("Spend too much", "watch the feed: the ledger refuses it, no water moves"),
+    "transfer": ("A transfer", "watch the pipe between two farms"),
+    "crash": ("Crash the leader", "watch the ledger: the leader role moves to another server"),
+    "majority": ("Lose the majority", "watch the ledger: with 1 server left, the transfer waits"),
+    "proof": ("Prove a record is real", "the Merkle proof checks a record without trusting the server"),
+    "fake": ("A fake farm", "watch the feed: reports without the right signature are refused"),
+    "nocert": ("No certificate", "watch the access check: refused before any request is read"),
+    "forbidden": ("Wrong role", "watch the access check: farm-a may not open a day"),
+    "lie": ("A lying ledger server", "watch ledger-3: it is outvoted, the true value is shown"),
+    "check": ("Check the 7 rules", "the checker reads the 3 databases directly"),
+    "honest": ("Undo the lie", "watch ledger-3: all 3 servers agree again"),
+    "recover": ("A farm loses its data", "watch farm-a: it rebuilds its balance from the ledger"),
+    "status": ("Ledger status", "who leads, the term, and how many records each server has"),
+    "state": ("Each farm's water", "the values 2 of 3 servers agree on"),
+}
+
+
+def live(path, body):
+    try:
+        tls.post(f"{DASH}{path}", json=body, timeout=1.5)
+    except (httpx.HTTPError, OSError):
+        pass
+
+
+def step(action, n=None, total=None):
+    title_text, hint = HINTS.get(action, (action, ""))
+    live("/api/step", {"title": title_text, "hint": hint, "n": n, "total": total})
+
+
+def note(text, tech="", level="info"):
+    live("/api/note", {"text": text, "tech": tech, "level": level})
+
+
 def leader():
     for _ in range(20):
         found = [n for n, r in status(quiet=True).items() if r == "leader"]
@@ -189,20 +231,30 @@ def proof():
         sys.exit("no transfer today yet: run 'python scripts/demo.py transfer' first")
     script = str(tls.ROOT / "scripts" / "verify_proof.py")
     print(f"Real record (transfer {t['transfer_id'][:8]}...):")
-    subprocess.run([sys.executable, script, "--transfer-id", t["transfer_id"]])
+    real = subprocess.run([sys.executable, script, "--transfer-id", t["transfer_id"]])
+    if real.returncode == 0:
+        note("The latest transfer was proved real", "Merkle proof · matches the signed root", "ok")
     print("\nFalsified copy (amount changed):")
-    subprocess.run([sys.executable, script, "--transfer-id", t["transfer_id"], "--tamper"])
+    fake_copy = subprocess.run([sys.executable, script, "--transfer-id", t["transfer_id"], "--tamper"])
+    if fake_copy.returncode != 0:
+        note("A falsified copy of it failed the proof", "Merkle proof · hash does not match the root", "alarm")
 
 
 def overspend():
-    transfer(999999)                                  # far more than any farm holds: refused
+    r = transfer(999999)                              # far more than any farm holds: refused
+    if r.status_code >= 400:
+        note("A farm asked to send 999 999 L: refused, it does not have that much",
+             f"HTTP {r.status_code} · checked by the ledger state machine", "alarm")
 
 
 def forbidden():
     tls.CERT, tls.KEY = str(tls.ROOT / "certs/farm-a.crt"), str(tls.ROOT / "certs/farm-a.key")
     tls._shared = None
     print("farm-a's certificate tries to open a day:")
-    show(tls.post(f"{GW}/days", json={"day": "2099-01-01", "limit_l": 1, "allocations": {"farm-a": 1}}, timeout=10))
+    r = show(tls.post(f"{GW}/days", json={"day": "2099-01-01", "limit_l": 1, "allocations": {"farm-a": 1}}, timeout=10))
+    if r.status_code == 403:
+        note("farm-a's certificate tried to open a day: refused (403)",
+             "authorization · only the operator may open a day", "alarm")
 
 
 def nocert():
@@ -213,6 +265,8 @@ def nocert():
         show(httpx.get(url, verify=ctx or True, timeout=5))
     except httpx.HTTPError as e:
         print(f"  REFUSED  {type(e).__name__}: {e}")
+        note("A request without a certificate was refused",
+             "mutual TLS · the handshake fails before any request is read", "alarm")
 
 
 LIE_SQL = ("UPDATE farm_balances SET allocated = allocated {} 5000 "
@@ -227,6 +281,8 @@ def psql(sql):
 def lie():
     print("ledger-3's database now says farm-a has 5000 L more (the other two are unchanged):")
     psql(LIE_SQL.format("+"))
+    note("ledger-3's database was changed by hand: farm-a +5000 L there only",
+         "simulated faulty server · the other two are unchanged", "lie")
     state()
 
 
@@ -350,10 +406,12 @@ def everything():
              ("Spend too much", overspend), (None, crash), (None, majority), ("Prove a record is real", proof),
              (None, fake), ("No certificate", nocert), ("Wrong role", forbidden), ("A lying ledger node", lie),
              (None, check), ("Undo the lie", honest), (None, check)]
-    for name, step in steps:
+    keys = {v: k for k, v in ACTIONS.items()}
+    for n, (name, action) in enumerate(steps, 1):
         if name:
             title(name)
-        step()
+        step(keys[action], n, len(steps))
+        action()
         try:
             input("\n  [Enter] next step ")
         except EOFError:
@@ -370,4 +428,6 @@ ACTIONS = {"status": status, "day": day, "offline": offline, "duplicate": duplic
 if __name__ == "__main__":
     if len(sys.argv) != 2 or sys.argv[1] not in ACTIONS:
         sys.exit(__doc__)
+    if sys.argv[1] != "all":
+        step(sys.argv[1])
     ACTIONS[sys.argv[1]]()

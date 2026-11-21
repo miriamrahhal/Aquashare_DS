@@ -38,6 +38,10 @@ LEDGERS = parse(os.getenv("LEDGER_NODES",
 FARMS = parse(os.getenv("FARM_NODES", "farm-a=http://localhost:8801,farm-b=http://localhost:8802,"
                                       "farm-c=http://localhost:8803,farm-d=http://localhost:8804"))
 ANALYTICS = os.getenv("ANALYTICS_URL", "http://localhost:8901")
+GATEWAYS = parse(os.getenv("GATEWAY_NODES", "gateway-1=http://gateway-1:8000,gateway-2=http://gateway-2:8000"))
+RABBIT_API = os.getenv("RABBITMQ_API", "http://rabbitmq:15672")
+RABBIT_AUTH = (os.getenv("RABBITMQ_USER", "aquashare"), os.getenv("RABBITMQ_PASS", "aquashare_dev"))
+RABBIT_QUEUE = os.getenv("RABBITMQ_QUEUE", "analytics.totals")
 
 # ---------------------------------------------------------------- terminal view
 # While a demo scenario runs, every HTTP call the dashboard makes is recorded as the
@@ -649,6 +653,127 @@ def farm_verify(farm: str, index: int):
     return proof(index=index)
 
 
+# ---------------------------------------------------------------- live view
+# One call that gathers what the live page draws: the day and the reservoir, each farm,
+# the gateways, the three ledger servers, RabbitMQ, and the latest ledger records.
+# demo.py tells the page which step it is running (/api/step) and reports results that never
+# reach the ledger, such as a 403 or a refused overspend (/api/note).
+STEP = {"n": None, "total": None, "title": None, "hint": None, "at": 0.0}
+NOTES: list[dict] = []
+plain = httpx.Client(timeout=1.5)      # RabbitMQ's management API is plain HTTP inside the Docker network
+
+
+def rabbit_queue():
+    try:
+        r = plain.get(f"{RABBIT_API}/api/queues/%2F/{RABBIT_QUEUE}", auth=RABBIT_AUTH)
+        q = r.json() if r.status_code == 200 else None
+    except (httpx.HTTPError, ValueError):
+        q = None
+    if not q:
+        return {"up": False}
+    stats = q.get("message_stats") or {}
+    rate = lambda key: round((stats.get(key) or {}).get("rate", 0) * 60)
+    return {"up": True, "queue": q.get("messages", 0), "consumers": q.get("consumers", 0),
+            "in_per_min": rate("publish_details"), "out_per_min": rate("deliver_get_details")}
+
+
+def gateway_up(name, url):
+    try:
+        return name, http.get(f"{url}/health", timeout=1.0).status_code == 200
+    except httpx.HTTPError:
+        return name, False
+
+
+def recent_records(ledgers, count=30):
+    """The latest committed records, from the node that has applied the most."""
+    best = max((s for s in ledgers.values() if s), key=lambda s: s.get("last_applied", 0), default=None)
+    if not best:
+        return []
+    items = get(f"{LEDGERS[best['node_id']]}/events", {"after": max(0, best["last_applied"] - count),
+                                                          "limit": count}) or []
+    out = []
+    for item in items:
+        c, r = item.get("command", {}), item.get("result", {})
+        if c.get("type") in ("noop", "test", "record_consumption") and r.get("ok"):
+            continue                                   # normal irrigation reports are too frequent to list
+        out.append({"index": item["log_index"], "type": c.get("type"), "ok": bool(r.get("ok")),
+                    "duplicate": bool(r.get("duplicate")), "farm": c.get("farm_id") or c.get("sender"),
+                    "recipient": c.get("recipient"), "amount": c.get("amount_l"),
+                    "error": r.get("error"), "day": c.get("day")})
+    return out
+
+
+@app.get("/api/live")
+def live(notes_after: int = 0):
+    state_job = pool.submit(get, f"{GATEWAY}/state")
+    rabbit_job = pool.submit(rabbit_queue)
+    ledger_jobs = [pool.submit(lambda n, u: (n, get(f"{u}/status")), n, u) for n, u in LEDGERS.items()]
+    farm_jobs = [pool.submit(lambda n, u: (n, get(f"{u}/sync")), n, u) for n, u in FARMS.items()]
+    gw_jobs = [pool.submit(gateway_up, n, u) for n, u in GATEWAYS.items()]
+    ledgers = dict(j.result() for j in ledger_jobs)
+    syncs = dict(j.result() for j in farm_jobs)
+    state = state_job.result() or {}
+    ledger_farms = {f["farm_id"]: f for f in state.get("farms", [])}
+    farms = {}
+    for name in FARMS:
+        sync, lf = syncs.get(name), ledger_farms.get(name, {})
+        farms[name] = {"reachable": sync is not None, "online": bool(sync and sync.get("online")),
+                       "link": (sync or {}).get("link"), "pending": (sync or {}).get("pending_events", 0),
+                       "allocated": lf.get("allocated", 0), "available": lf.get("available"),
+                       "consumed": lf.get("consumed", 0), "sent": lf.get("sent", 0),
+                       "received": lf.get("received", 0), "signs": lf.get("signs_reports")}
+    limit = state.get("limit_l")
+    used = sum(f["consumed"] for f in farms.values())
+    return {
+        "at": time.time(), "day": state.get("day"), "limit": limit, "used": used,
+        "reads": {"ok": bool(state), "agreed_by": state.get("agreed_by", []),
+                  "outvoted": state.get("outvoted", []), "behind": state.get("behind", []),
+                  "gateway": state.get("gateway")},
+        "farms": farms,
+        "gateways": dict(j.result() for j in gw_jobs),
+        "ledgers": {n: ({"up": True, "role": s["role"], "term": s["term"], "commit": s["commit_index"],
+                         "hash": (s.get("last_log_hash") or "")[:8]} if s else {"up": False})
+                    for n, s in ledgers.items()},
+        "rabbit": rabbit_job.result(),
+        "records": recent_records(ledgers),
+        "step": STEP,
+        "notes": [n for n in NOTES if n["id"] > notes_after],
+        "tls": tls.ENABLED,
+    }
+
+
+class StepBody(BaseModel):
+    title: str | None = None
+    hint: str | None = None
+    n: int | None = None
+    total: int | None = None
+
+
+@app.post("/api/step")
+def set_step(body: StepBody):
+    STEP.update(body.model_dump(), at=time.time())
+    return STEP
+
+
+class NoteBody(BaseModel):
+    text: str
+    tech: str = ""
+    level: str = "info"          # info, ok, warn, alarm
+
+
+@app.post("/api/note")
+def add_note(body: NoteBody):
+    note = {"id": (NOTES[-1]["id"] + 1) if NOTES else 1, "at": time.time(), **body.model_dump()}
+    NOTES.append(note)
+    del NOTES[:-50]
+    return note
+
+
+@app.get("/classic")
+def classic():
+    return FileResponse(Path(__file__).with_name("index.html"))
+
+
 @app.get("/flowchart.png")
 def flowchart():
     return FileResponse(Path(__file__).with_name("flowchart.png"))
@@ -656,4 +781,4 @@ def flowchart():
 
 @app.get("/")
 def index():
-    return FileResponse(Path(__file__).with_name("index.html"))
+    return FileResponse(Path(__file__).with_name("live.html"))
