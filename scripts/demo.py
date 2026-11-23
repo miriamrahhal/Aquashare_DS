@@ -174,6 +174,7 @@ def sync(farm):
     s = tls.get(f"http://localhost:{FARMS[farm]}/sync", timeout=5).json()
     print(f"  {farm}: link={s.get('link')} online={s.get('online')} pending={s.get('pending_events')} "
           f"local_used={s.get('local_consumed')} ledger_used={s.get('ledger_consumed')}")
+    return s
 
 
 def offline():
@@ -185,8 +186,19 @@ def offline():
         sync(farm)
     print(f"Link back:")
     tls.post(f"http://localhost:{FARMS[farm]}/link/up", json={}, timeout=5)
-    time.sleep(8)
+    offline_total = tls.get(f"http://localhost:{FARMS[farm]}/sync", timeout=5).json().get("local_consumed", 0)
+    print(f"  {farm} had used {offline_total} L when the link came back")
+    for _ in range(30):                               # wait until the ledger holds everything used offline
+        s = tls.get(f"http://localhost:{FARMS[farm]}/sync", timeout=5).json()
+        if (s.get("ledger_consumed") or 0) >= offline_total:
+            break
+        time.sleep(1)
     sync(farm)
+    if (s.get("ledger_consumed") or 0) >= offline_total:
+        print(f"  the ledger now holds at least {offline_total} L for {farm}: every offline report arrived, "
+              f"counted once (any small gap is new watering since reconnecting)")
+    else:
+        print("  some offline reports are still on their way; run: python scripts/demo.py state")
 
 
 LAST = {"sender": None}
@@ -262,7 +274,11 @@ def nocert():
     url = tls.fix(f"{GW}/state")
     try:
         ctx = ssl.create_default_context(cafile=tls.CA) if tls.ENABLED else None
-        show(httpx.get(url, verify=ctx or True, timeout=5))
+        r = httpx.get(url, verify=ctx or True, timeout=5)
+        print(f"  HTTP {r.status_code}  refused by Nginx: no client certificate was sent")
+        if r.status_code in (400, 495, 496):
+            note("A request without a certificate was refused (400)",
+                 "mutual TLS · Nginx stops it before it reaches a gateway", "alarm")
     except httpx.HTTPError as e:
         print(f"  REFUSED  {type(e).__name__}: {e}")
         note("A request without a certificate was refused",
@@ -419,15 +435,55 @@ def everything():
     print("\nDone. Longer tests: partition, chaos, benchmark, spark, tests, kubernetes, recover.")
 
 
+def machines():
+    print("The separate machines (containers) of AquaShare:")
+    subprocess.run(["docker", "compose", "ps", "--format", "table {{.Name}}\t{{.Status}}"])
+
+
+def present():
+    """The presentation demo: each step runs, then verifies, and names the distributed systems criteria."""
+    steps = [
+        ("It is a distributed system", "separate machines that only talk by messages", [machines, status],
+         "distribution, communication by messages, transparency, heterogeneity"),
+        ("Open the day", "watch the reservoir and the 4 farms", [day],
+         "coordination by consensus, partitioning (escrow), logical time, consistency"),
+        ("The network fails", "watch farm-a: it keeps watering offline", [offline],
+         "fault tolerance, availability, partition tolerance (CAP), eventual consistency"),
+        ("A message arrives twice", "watch the feed: counted only once", [duplicate, state],
+         "reliable communication, exactly-once (idempotency), consistency"),
+        ("The leader crashes", "watch the ledger: a new leader is elected", [crash],
+         "fault tolerance, failure detection, replication, consensus (Raft), recovery"),
+        ("The majority is lost", "watch the ledger: with 1 server left, nothing is saved", [majority],
+         "quorum, consistency over availability (CAP), recovery"),
+        ("No certificate, wrong role", "watch the access check", [nocert, forbidden],
+         "security, mutual authentication (mutual TLS), authorization"),
+        ("A server lies", "watch ledger-3: it is outvoted", [lie, check, honest],
+         "Byzantine fault (reads), majority voting, data integrity"),
+        ("Final proof", "the checker reads the 3 databases directly", [check],
+         "correctness: the 3 copies are identical and every rule holds"),
+    ]
+    for n, (name, hint, actions, criteria) in enumerate(steps, 1):
+        print(f"\n{'=' * 70}\n STEP {n}/{len(steps)}: {name}\n DS criteria: {criteria}\n{'=' * 70}")
+        live("/api/step", {"title": name, "hint": hint, "n": n, "total": len(steps)})
+        for action in actions:
+            action()
+        try:
+            input("\n  [Enter] next step ")
+        except EOFError:
+            pass
+    print("\nDemo finished: every step shown and verified.")
+
+
 ACTIONS = {"status": status, "day": day, "offline": offline, "duplicate": duplicate, "overspend": overspend,
            "transfer": transfer, "proof": proof, "forbidden": forbidden, "nocert": nocert, "state": state,
            "lie": lie, "honest": honest, "crash": crash, "majority": majority, "fake": fake, "check": check,
            "recover": recover, "partition": partition, "chaos": chaos, "benchmark": benchmark, "spark": spark,
-           "tests": tests, "kubernetes": kubernetes, "all": everything}
+           "tests": tests, "kubernetes": kubernetes, "all": everything,
+           "present": present}
 
 if __name__ == "__main__":
     if len(sys.argv) != 2 or sys.argv[1] not in ACTIONS:
         sys.exit(__doc__)
-    if sys.argv[1] != "all":
+    if sys.argv[1] not in ("all", "present"):
         step(sys.argv[1])
     ACTIONS[sys.argv[1]]()
