@@ -303,8 +303,21 @@ def lie():
 
 
 def honest():
+    """Put ledger-3 back: copy farm-a's true allocations from ledger-1 for every day,
+    so even a lie left over from an earlier run (an older day) is undone."""
+    import subprocess
     print("Undoing the change on ledger-3:")
-    psql(LIE_SQL.format("-"))
+    rows = subprocess.run(["docker", "exec", "aq-ledger-db-1", "psql", "-U", "aquashare", "-d", "ledger", "-At",
+                           "-c", "SELECT day, allocated FROM farm_balances WHERE farm_id='farm-a';"],
+                          capture_output=True, text=True).stdout.split()
+    sql = "".join(f"UPDATE farm_balances SET allocated = {value} WHERE farm_id='farm-a' AND day='{day}';"
+                  for day, value in (row.split("|") for row in rows if "|" in row))
+    if sql:
+        subprocess.run(["docker", "exec", "aq-ledger-db-3", "psql", "-q", "-U", "aquashare", "-d", "ledger",
+                        "-c", "BEGIN;" + sql + "COMMIT;"])
+        print(f"  ledger-3: farm-a restored from ledger-1 for {sql.count('UPDATE')} day(s)")
+    else:
+        psql(LIE_SQL.format("-"))                     # ledger-1 unreachable: undo the latest day only
     state()
 
 
@@ -451,10 +464,16 @@ def present():
          "fault tolerance, availability, partition tolerance (CAP), eventual consistency"),
         ("A message arrives twice", "watch the feed: counted only once", [duplicate, state],
          "reliable communication, exactly-once (idempotency), consistency"),
+        ("Spend too much", "watch the feed: the ledger refuses it", [overspend],
+         "consistency, invariant enforcement (no farm over its share)"),
         ("The leader crashes", "watch the ledger: a new leader is elected", [crash],
          "fault tolerance, failure detection, replication, consensus (Raft), recovery"),
         ("The majority is lost", "watch the ledger: with 1 server left, nothing is saved", [majority],
          "quorum, consistency over availability (CAP), recovery"),
+        ("Prove a record is real", "a Merkle proof checks a record without trusting the server", [proof],
+         "data integrity, verifiability (hash chain + Merkle proof)"),
+        ("A fake farm", "watch the feed: unsigned reports are refused", [fake],
+         "security, authenticity (digital signatures)"),
         ("No certificate, wrong role", "watch the access check", [nocert, forbidden],
          "security, mutual authentication (mutual TLS), authorization"),
         ("A server lies", "watch ledger-3: it is outvoted", [lie, check, honest],
@@ -474,12 +493,31 @@ def present():
     print("\nDemo finished: every step shown and verified.")
 
 
+def reset():
+    """Start from a clean system: delete all data, restart everything, open today, check the 7 rules."""
+    title("Reset everything to today")
+    os.chdir(tls.ROOT)
+    run("docker", "compose", "down", "-v")
+    run("docker", "compose", "up", "-d")
+    print("  (waiting for the 3 ledgers to elect a leader)")
+    for _ in range(60):
+        time.sleep(3)
+        roles = status(quiet=True)
+        if "leader" in roles.values() and "down" not in roles.values():
+            break
+    time.sleep(10)                                     # gateways and farms finish starting
+    status()
+    py("setup_today.py")
+    time.sleep(5)
+    check()
+
+
 ACTIONS = {"status": status, "day": day, "offline": offline, "duplicate": duplicate, "overspend": overspend,
            "transfer": transfer, "proof": proof, "forbidden": forbidden, "nocert": nocert, "state": state,
            "lie": lie, "honest": honest, "crash": crash, "majority": majority, "fake": fake, "check": check,
            "recover": recover, "partition": partition, "chaos": chaos, "benchmark": benchmark, "spark": spark,
            "tests": tests, "kubernetes": kubernetes, "all": everything,
-           "present": present}
+           "present": present, "reset": reset}
 
 if __name__ == "__main__":
     if len(sys.argv) != 2 or sys.argv[1] not in ACTIONS:

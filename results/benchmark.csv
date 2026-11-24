@@ -1,9 +1,9 @@
 experiment,setup,clients,operations,errors,throughput,p50_ms,p95_ms,p99_ms,mean_ms
-load,load balancer,1,232,0,15.4,64.6,74.2,89.8,64.8
-load,load balancer,2,461,0,30.6,63.4,88.8,135.4,65.2
-load,load balancer,4,946,0,62.8,61.6,102.3,120.9,63.5
-load,load balancer,8,1064,0,69.4,108.9,194.4,239.3,114.3
-load,load balancer,16,1180,0,76.4,198.1,332.0,431.9,207.0
-gateway layer,direct to leader,8,1118,0,72.9,103.5,200.6,243.8,108.9
-gateway layer,1 gateway,8,993,0,64.6,113.7,196.8,219.0,121.7
-gateway layer,load balancer + 2 gateways,8,964,0,62.7,115.3,235.3,308.7,126.6
+load,load balancer,1,122,0,15.2,56.1,111.1,124.0,65.7
+load,load balancer,2,157,0,19.5,96.3,174.3,197.7,102.2
+load,load balancer,4,183,0,21.7,173.0,284.8,350.9,178.3
+load,load balancer,8,207,0,24.5,304.9,463.8,572.6,313.9
+load,load balancer,16,189,0,21.9,677.7,1138.9,1233.2,706.1
+gateway layer,direct to leader,8,195,0,23.3,326.1,491.1,756.2,342.6
+gateway layer,1 gateway,8,158,0,18.6,410.3,610.1,763.2,414.6
+gateway layer,load balancer + 2 gateways,8,145,0,18.0,409.9,745.8,842.3,442.1

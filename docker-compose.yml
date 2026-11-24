@@ -117,28 +117,28 @@ services:
   farm-a:
     <<: *farm
     container_name: aq-farm-a
-    environment: { FARM_ID: farm-a,  GATEWAY_URL: http://gateway-lb }
+    environment: { FARM_ID: farm-a, GATEWAY_URL: http://gateway-lb, TICK_SECONDS: "${TICK_SECONDS:-3}", FLOW_L_PER_TICK: "${FLOW_L_PER_TICK:-8}" }
     ports: [ "8801:8000" ]
     volumes: [ "farm-a-data:/data" ]
 
   farm-b:
     <<: *farm
     container_name: aq-farm-b
-    environment: { FARM_ID: farm-b, GATEWAY_URL: http://gateway-lb }
+    environment: { FARM_ID: farm-b, GATEWAY_URL: http://gateway-lb, TICK_SECONDS: "${TICK_SECONDS:-3}", FLOW_L_PER_TICK: "${FLOW_L_PER_TICK:-8}" }
     ports: [ "8802:8000" ]
     volumes: [ "farm-b-data:/data" ]
 
   farm-c:
     <<: *farm
     container_name: aq-farm-c
-    environment: { FARM_ID: farm-c, GATEWAY_URL: http://gateway-lb }
+    environment: { FARM_ID: farm-c, GATEWAY_URL: http://gateway-lb, TICK_SECONDS: "${TICK_SECONDS:-3}", FLOW_L_PER_TICK: "${FLOW_L_PER_TICK:-9}" }
     ports: [ "8803:8000" ]
     volumes: [ "farm-c-data:/data" ]
 
   farm-d:
     <<: *farm
     container_name: aq-farm-d
-    environment: { FARM_ID: farm-d, GATEWAY_URL: http://gateway-lb }
+    environment: { FARM_ID: farm-d, GATEWAY_URL: http://gateway-lb, TICK_SECONDS: "${TICK_SECONDS:-3}", FLOW_L_PER_TICK: "${FLOW_L_PER_TICK:-10}" }
     ports: [ "8804:8000" ]
     volumes: [ "farm-d-data:/data" ]
 
